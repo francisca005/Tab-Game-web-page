@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" >
+  <meta name="viewport" content="width=device-width,initial-scale=1" >
+  <title>Tâb — The Ancient Egyptian Board Game</title>
+  <link rel="stylesheet" href="styles.css" >
+  <link rel="icon" type="image/png" href="http://www.alunos.dcc.fc.up.pt/~up202303448/tab_images/tab_logo.png">
+</head>
+<body>
+  <!-- HERO SECTION -->
+  <header class="hero">
+    <!-- Authentication area in top-right -->
+    <div class="auth-mini card">
+      <h3>Authentication</h3>
+      <form class="login-form hidden">
+        <input type="text" placeholder="User" class="user-input" >
+        <input type="password" placeholder="Password" class="pass-input">
+      </form>
+
+      <div class="auth-buttons">
+        <button class="login-btn">Log In</button>
+        <button class="logout-btn" disabled>Log Out</button>
+      </div>
+
+      <p class="welcome-text hidden"></p>
+    </div>
+
+
+
+    <div class="logo-symbol">✕</div>
+    <h1>Tâb — The Ancient Egyptian Board Game</h1>
+    <p class="subtitle">Play the strategy game once enjoyed by pharaohs.</p>
+    <a class="cta-btn" id="goToConfigBtn" href="#configurations" role="button">
+      Go To Configurations
+    </a>
+
+  </header>
+
+  <main>
+    <!--  MIDDLE SECTION -->
+    <section class="middle">
+      <!-- Row 1: Rules + Video -->
+      <div class="row">
+        <div class="rules card">
+          <h2>Game Rules</h2>
+          <details data-rule="objective">
+          <summary>Objective</summary>
+          <p>
+            Win the game by capturing all of your opponent’s pieces or being the
+            last player with pieces remaining on the board.
+          </p>
+        </details>
+
+          <details data-rule="setup">
+          <summary>Board & Setup</summary>
+          <div>
+            <p>
+              The board has 4 rows and an odd number of columns from 7 to 15.
+              <strong>Gold</strong> on the top row (row 1) and
+              <strong>Black</strong> on the bottom row (row 4).
+            </p>
+            <p>
+              Pieces move along a <strong>serpentine path</strong>, from the bottom player point of view:
+              rows 1 & 3 move left → right, while rows 2 & 4 move right → left.
+              When a piece reaches the 3rd row, it can choose either to continue to
+              the 4th row or to move upward to the 2nd row (bifurcation rule).
+            </p>
+          </div>
+        </details>
+
+          <details data-rule="sticks">
+          <summary>Turns & Sticks</summary>
+          <div>
+            <p>
+              On each turn, the player rolls four sticks. The number of sticks that
+              land <em>standing up</em> determines the movement value:</p>
+            <ul>
+              <li>1 → move 1 square</li>
+              <li>2 → move 2 squares</li>
+              <li>3 → move 3 squares</li>
+              <li>4 → move 4 squares</li>
+              <li>0 (up = 0) → value 6</li>
+            </ul>
+            <p>
+              Values 1, 4 and 6 grant an <strong>extra throw</strong> in the same
+              turn (potentially multiple throws per turn).
+            </p>
+          </div>
+        </details>
+
+          <details data-rule="movement">
+          <summary>Movement Rules</summary>
+          <div>
+            <ul>
+              <li>
+                A piece’s <strong>first move</strong> can only be made with a
+                roll = 1 (Tâb). If the player rolls another value, that piece
+                cannot move yet.
+              </li>
+              <li>
+                A move cannot land on a square occupied by one of your own pieces.
+              </li>
+              <li>
+                A piece may <strong>enter the top (final) row only once</strong>.
+                Once it leaves that row, it cannot enter it again.
+              </li>
+              <li>
+                A piece may <strong>never return to its starting row</strong> once
+                it has left it.
+              </li>
+              <li>
+                A player may only <strong>enter the final row</strong> when their
+                own starting row is completely empty.
+              </li>
+            </ul>
+          </div>
+        </details>
+
+          <details data-rule="format">
+          <summary>Piece Formats</summary>
+          <div>
+            <p>A piece changes its format along the game:</p>
+            <ul>
+              <li>Starts as a circle (●)</li>
+              <li>Becomes a square (■) after being moved the first time</li>
+              <li>Becomes a diamond (◆) after entering the 4th row</li>
+            </ul>
+          </div>
+        </details>
+
+          <details data-rule="special">
+          <summary>Special Rules - Extra Throws & Skipping</summary>
+          <div>
+            <p>
+              If a player rolls a 1, 4 or 6 on their first throw, they earn an
+              <strong>extra throw</strong>. This bonus can repeat multiple times in
+              the same turn.
+            </p>
+            <p>
+              If a player cannot make any legal move, they must
+              <strong>skip their turn</strong>. If they still have an extra throw
+              pending (from 1/4/6), they may roll again before skipping.
+            </p>
+          </div>
+        </details>
+
+          <details data-rule="end">
+          <summary>End of the Game</summary>
+          <p>
+            The game ends when one player has no pieces remaining.
+            The opponent is declared the winner.
+          </p>
+        </details>
+        </div>
+
+        <!-- Rule push-up -->
+        <div id="ruleOverlay" class="rule-overlay hidden">
+          <div class="rule-popup card">
+            <button class="close-rule">← Back to Rules</button>
+            <h2 id="ruleTitle" aria-live="polite"></h2>
+            <div id="ruleText"></div>
+            <video id="ruleVideoModal" controls>
+              <source src="about:blank" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+
+        <!-- Image -->
+        <div class="demo card">
+          <h2>Ancient Game Board</h2>
+          <img id="ruleImage" src="http://www.alunos.dcc.fc.up.pt/~up202303448/tab_images/tab_board.png" alt="Tâb board demo">
+        </div>
+      </div>
+
+      <!-- Row 2: Config + Classifications -->
+      <div class="row">
+        <div class="config card" id="configurations">
+          <h2>Configuration</h2>
+
+          <label for="boardSize">Board size (odd 7–15)
+            <input id="boardSize" type="number" min="7" max="15" step="2" value="9">
+          </label>
+
+          <label for="modeSelect">Mode
+            <select id="modeSelect">
+              <option value="pvp_online">Player vs Player</option>
+              <option value="pvc">Player vs Computer</option>
+            </select>
+          </label>
+
+          <label for="firstSelect">First to play
+            <select id="firstSelect">
+              <option value="Gold">Gold</option>
+              <option value="Black">Black</option>
+            </select>
+          </label>
+
+          <!-- Extra options only available in ailevel -->
+          <label for="aiLevel" id="aiLevelGroup">
+            AI Level
+            <select id="aiLevel">
+              <option value="Easy">Easy</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Hard">Hard</option>
+              <option value="Adaptive">Adaptive</option>
+            </select>
+          </label>
+
+          <!-- Button to star the game -->
+          <button class="cta-btn go-game-btn" id="goToGameBtn" type="button">Go To Game</button>
+        </div>
+
+
+        <!-- Classification Section-->
+        <div class="classifications card">
+          <h2>Classifications</h2>
+          <p>View all recorded games and results.</p>
+          <button class="cta-btn" id="openClassificationsBtn">See Classifications</button>
+        </div>
+
+        <!-- Popup for all classifications -->
+        <div id="classificationsOverlay" class="classifications-overlay hidden">
+          <div class="classifications-popup card">
+            <button class="close-classifications">← Back to Menu</button>
+            <h2>Classifications</h2>
+            <div id="classificationsTableContainer"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- BOTTOM SECTION -->
+    <section class="bottom">
+      <!-- Left: Sticks -->
+      <div class="sticks-area card">
+        <h2>Throw Sticks</h2>
+        <div class="sticks">⎮⎮⎮⎮</div>
+        <p class="result">Result: —</p>
+        <button class="throw-btn">Throw</button>
+      </div>
+
+      <!-- Center: Board -->
+      <div class="board-area card">
+        <div class="status-bar">
+          <span class="gold-player">Gold: 3</span>
+          <span class="black-player">Black: 5</span>
+        </div>
+
+        
+        <div class="board"></div>
+        <div class="actions">
+          <button class="quit-btn">Quit</button>
+          <button class="skip-btn" disabled>Skip Turn</button>
+        </div>
+      </div>
+
+      <!-- Right: Messages -->
+      <div class="messages card">
+        <h2>Messages</h2>
+        <div class="chat">
+          <p><strong>System:</strong> Game initialized.</p>
+          <p><strong>Gold:</strong> I start!</p>
+          <p><strong>Black:</strong> Good luck!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Overlay animation for sticks when throwing -->
+    <div id="sticks-overlay" class="sticks-overlay hidden">
+      <div class="sticks-big">⎮⎮⎮⎮</div>
+      <p class="sticks-result">Result: —</p>
+    </div>
+
+    <!-- Main application script -->
+    <script type="module" src="js/App.js"></script>
+
+  </main>
+
+  <footer>
+    <p>© 2025 Tâb Project - Developed for Educational Purposes</p>
+  </footer>
+
+</body>
+</html>
