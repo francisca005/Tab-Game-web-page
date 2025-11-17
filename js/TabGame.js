@@ -1,5 +1,5 @@
 // js/TabGame.js
-import { Piece } from "./piece.js";
+import { Piece } from "./Piece.js";
 import { AIPlayer } from "./AIPlayer.js";
 
 // Classe Principal — TabGame
@@ -570,6 +570,7 @@ export class TabGame {
 
 
     }
+
 
 
 }
