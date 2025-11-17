@@ -1,42 +1,34 @@
 // js/App.js
 import { UIManager } from "./UIManager.js";
 import { TabGame } from "./TabGame.js";
+import { OnlineGame } from "./OnlineGame.js";
+
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  // Inicialização principal
   const ui = new UIManager();
-  const game = new TabGame(ui);
+  const localGame = new TabGame(ui);
+  const onlineGame = new OnlineGame(ui);
 
+  // Por omissão, assumimos modo local
+  ui.onThrow = () => localGame.rollSticks();
+  ui.onQuit  = () => localGame.quitGame();
 
-  // Configurações e eventos do jogo 
-  ui.onThrow = () => game.rollSticks();
-  ui.onQuit = () => game.quitGame();
-
-
+  // onGoToGame escolhe o motor
   ui.onGoToGame = ({ cols, mode, first, aiLevel }) => {
-    game.init(cols, first);
-    
-    // Define texto do modo 
-    let modeText = "";
-    switch (mode) {
-      case "pvp_local":
-        modeText = "Player vs Player (same computer)";
-        break;
-      case "pvp_online":
-        modeText = "Player vs Player (requires second player login)";
-        break;
-      case "pvc":
-        modeText = `Player vs Computer (${aiLevel})`;
-        break;
+    if (mode === "pvc" || mode === "pvp_local") {
+      // jogo local original
+      localGame.init(cols, first);
+      ui.addMessage("System", `New LOCAL game: ${mode}, first to play: ${first}.`);
+    } else if (mode === "pvp_online") {
+      // jogo online
+      ui.addMessage("System", "Starting ONLINE game...");
+      onlineGame.start(cols);
     }
 
-    // Mensagem de início de jogo
-    ui.addMessage("System", `New game: ${modeText}, first to play: ${first}.`);
-
-    // scroll até ao tabuleiro
     document.querySelector(".bottom")?.scrollIntoView({ behavior: "smooth" });
   };
+
 
   ui.onConfigChange = () => ui.updateAIVisibility();
 
@@ -45,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ui.updateAIVisibility(); 
 
   // Cria o tabuleiro inicial
-  game.init(9, "Gold");
+  localGame.init(9, "Gold");
 
   // Modal de regras (PUSH-UP)
   const ruleItems = document.querySelectorAll(".rules details");

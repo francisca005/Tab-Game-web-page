@@ -1,4 +1,5 @@
 // js/UIManager.js
+import { register } from "./ServerAPI.js";
 
 export class UIManager {
   constructor() {
@@ -42,6 +43,7 @@ export class UIManager {
     this.onQuit = null;
     this.onGoToGame = null;
     this.onConfigChange = null;
+    this.onPass = null;
   }
 
   //Inicialização e listeners 
@@ -49,6 +51,10 @@ export class UIManager {
     // Botões principais
     this.throwBtn?.addEventListener("click", () => this.onThrow?.());
     this.quitBtn?.addEventListener("click", () => this.onQuit?.());
+
+    this.skipBtn?.addEventListener("click", () => {
+      this.onPass?.();
+    });
 
     // Navegar para as configurações
     this.goToConfigBtn?.addEventListener("click", (e) => {
@@ -80,19 +86,64 @@ export class UIManager {
   }
 
   // Login visual (modo demonstração)
+    // Login visual + autenticação no servidor
   initLogin() {
     if (!this.loginBtn || !this.logoutBtn) return;
 
-    this.loginBtn.addEventListener("click", () => {
-      this.loginForm.classList.toggle("hidden");
-      this.addMessage("System", "Modo visual: autenticação não implementada.");
+    this.loginBtn.addEventListener("click", async () => {
+      // 1) Se o formulário ainda está escondido, só o mostramos e saímos
+      if (this.loginForm.classList.contains("hidden")) {
+        this.loginForm.classList.remove("hidden");
+        this.userInput.focus();
+        return;
+      }
+
+      // 2) Form já está visível → tentar autenticar
+      const nick = this.userInput.value.trim();
+      const pass = this.passInput.value.trim();
+
+      if (!nick || !pass) {
+        this.addMessage("System", "Please enter a user and password.");
+        return;
+      }
+
+      this.addMessage("System", "Registering / logging in on server...");
+      const res = await register(nick, pass);
+
+      if (res.error) {
+        this.addMessage("System", `Auth error: ${res.error}`);
+        return;
+      }
+
+      // Sucesso
+      this.nick = nick;
+      this.password = pass;
+
+      this.loginForm.classList.add("hidden");
+      this.loginBtn.disabled = true;
+      this.logoutBtn.disabled = false;
+      this.welcomeText.textContent = `Welcome, ${nick}!`;
+      this.welcomeText.classList.remove("hidden");
+
+      this.addMessage("System", "Authentication succeeded on server.");
     });
 
     this.logoutBtn.addEventListener("click", () => {
-      this.loginForm.classList.add("hidden");
-      this.addMessage("System", "Sessão terminada (modo visual).");
+      this.nick = null;
+      this.password = null;
+      this.loginBtn.disabled = false;
+      this.logoutBtn.disabled = true;
+      this.welcomeText.classList.add("hidden");
+      this.addMessage("System", "Logged out (server auth forgotten).");
     });
   }
+
+
+  getCredentials() {
+    if (!this.nick || !this.password) return null;
+    return { nick: this.nick, password: this.password };
+  }
+
 
   //Chat 
   addMessage(sender, text) {
