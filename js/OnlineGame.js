@@ -98,26 +98,37 @@ export class OnlineGame {
       return;
     }
 
+    const previousTurn = this.currentTurn;
+
+    // 1) Atualizar peças / estado do tabuleiro, se vierem
     if (data.pieces) {
       this.pieces = data.pieces;
       this.initialNick = data.initial ?? this.initialNick;
       this.step = data.step ?? this.step;
-      this.currentTurn = data.turn ?? this.currentTurn;
-      this.mustPass = data.mustPass ?? this.mustPass;
-      this.dice = data.dice ?? this.dice;
+      this.players = data.players ?? this.players;
 
       this.renderBoardFromPieces();
     }
 
-    // jogo acabou de começar
+    // 2) Atualizar infos de turno / dado / mustPass, mesmo que venha sem "pieces"
+    if (data.turn !== undefined) {
+      this.currentTurn = data.turn;
+    }
+    if (data.mustPass !== undefined) {
+      this.mustPass = data.mustPass;
+    }
+    if (data.dice !== undefined) {
+      this.dice = data.dice;
+    }
+
+    // 3) Mensagens de início de jogo / mudança de vez
     if (!previousTurn && this.currentTurn) {
       this.ui.addMessage("System", `Game started! First to play: ${this.currentTurn}.`);
-    }
-    // turno mudou
-    else if (previousTurn && this.currentTurn && previousTurn !== this.currentTurn) {
+    } else if (previousTurn && this.currentTurn && previousTurn !== this.currentTurn) {
       this.ui.addMessage("System", `It's now ${this.currentTurn}'s turn.`);
     }
 
+    // 4) Fim de jogo
     if (data.winner !== undefined) {
       this.winner = data.winner;
       if (this.winner) {
@@ -125,9 +136,10 @@ export class OnlineGame {
       } else {
         this.ui.addMessage("System", "Game ended without a winner.");
       }
-      this.cleanup();
+      this.cleanup(); // fecha o EventSource
     }
   }
+
 
   cleanup() {
     if (this.eventSource) {
