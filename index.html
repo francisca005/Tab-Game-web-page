@@ -2,15 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" >
-  <meta name="viewport" content="width=device-width,initial-scale=1" >
-  <title>Tâb — The Ancient Egyptian Board Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" > <title>Tâb — The Ancient Egyptian Board Game</title>
   <link rel="stylesheet" href="styles.css" >
   <link rel="icon" type="image/png" href="http://www.alunos.dcc.fc.up.pt/~up202303448/tab_images/tab_logo.png">
 </head>
 <body>
-  <!-- HERO SECTION -->
   <header class="hero">
-    <!-- Authentication area in top-right -->
     <div class="auth-mini card">
       <h3>Authentication</h3>
       <form class="login-form hidden">
@@ -38,9 +35,7 @@
   </header>
 
   <main>
-    <!--  MIDDLE SECTION -->
     <section class="middle">
-      <!-- Row 1: Rules + Video -->
       <div class="row">
         <div class="rules card">
           <h2>Game Rules</h2>
@@ -154,27 +149,23 @@
         </details>
         </div>
 
-        <!-- Rule push-up -->
         <div id="ruleOverlay" class="rule-overlay hidden">
           <div class="rule-popup card">
             <button class="close-rule">← Back to Rules</button>
             <h2 id="ruleTitle" aria-live="polite"></h2>
             <div id="ruleText"></div>
             <video id="ruleVideoModal" controls>
-              <source src="about:blank" type="video/mp4">
-              Your browser does not support the video tag.
+              <source type="video/mp4"> Your browser does not support the video tag.
             </video>
           </div>
         </div>
 
-        <!-- Image -->
         <div class="demo card">
           <h2>Ancient Game Board</h2>
           <img id="ruleImage" src="http://www.alunos.dcc.fc.up.pt/~up202303448/tab_images/tab_board.png" alt="Tâb board demo">
         </div>
       </div>
 
-      <!-- Row 2: Config + Classifications -->
       <div class="row">
         <div class="config card" id="configurations">
           <h2>Configuration</h2>
@@ -197,7 +188,6 @@
             </select>
           </label>
 
-          <!-- Extra options only available in ailevel -->
           <label for="aiLevel" id="aiLevelGroup">
             AI Level
             <select id="aiLevel">
@@ -208,19 +198,16 @@
             </select>
           </label>
 
-          <!-- Button to star the game -->
           <button class="cta-btn go-game-btn" id="goToGameBtn" type="button">Go To Game</button>
         </div>
 
 
-        <!-- Classification Section-->
         <div class="classifications card">
           <h2>Classifications</h2>
           <p>View all recorded games and results.</p>
           <button class="cta-btn" id="openClassificationsBtn">See Classifications</button>
         </div>
 
-        <!-- Popup for all classifications -->
         <div id="classificationsOverlay" class="classifications-overlay hidden">
           <div class="classifications-popup card">
             <button class="close-classifications">← Back to Menu</button>
@@ -232,9 +219,7 @@
       </div>
     </section>
 
-    <!-- BOTTOM SECTION -->
     <section class="bottom">
-      <!-- Left: Sticks -->
       <div class="sticks-area card">
         <h2>Throw Sticks</h2>
         <div class="sticks">⎮⎮⎮⎮</div>
@@ -242,7 +227,6 @@
         <button class="throw-btn">Throw</button>
       </div>
 
-      <!-- Center: Board -->
       <div class="board-area card">
         <div class="status-bar">
           <span class="gold-player">Gold: 3</span>
@@ -257,7 +241,6 @@
         </div>
       </div>
 
-      <!-- Right: Messages -->
       <div class="messages card">
         <h2>Messages</h2>
         <div class="chat">
@@ -268,13 +251,11 @@
       </div>
     </section>
 
-    <!-- Overlay animation for sticks when throwing -->
     <div id="sticks-overlay" class="sticks-overlay hidden">
       <div class="sticks-big">⎮⎮⎮⎮</div>
       <p class="sticks-result">Result: —</p>
     </div>
 
-    <!-- Main application script -->
     <script type="module" src="js/App.js"></script>
 
   </main>
