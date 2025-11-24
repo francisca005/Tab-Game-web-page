@@ -11,7 +11,7 @@ export class OnlineGame {
     this.currentTurn = null;  // nick com vez
     this.initialNick = null;  // quem começou
     this.pieces = null;
-    this.step = null;         // Novo: 'from', 'to', etc. (Vindo do servidor)
+    this.step = null;         // 'from', 'to', etc. (Vindo do servidor)
     this.mustPass = null;
     this.dice = null;
     this.winner = null;
@@ -60,7 +60,6 @@ export class OnlineGame {
     if (res.error) {
       this.ui.addMessage("System", `Roll error: ${res.error}`);
     }
-    // resultado vem no update
   }
 
   async handleLeave() {
@@ -89,13 +88,13 @@ export class OnlineGame {
         return;
     }
 
-    // 2. VERIFICAÇÃO DE DADO ROLADO
+    // 2. VERIFICAÇÃO DE DADO ROLADO (CRÍTICO para evitar 400 antes do roll)
     if (this.dice === null || this.dice === undefined) {
         this.ui.addMessage("System", "You must roll the sticks first!");
         return;
     }
     
-    // 3. ENVIAR NOTIFICAÇÃO (seleção/destino)
+    // 3. ENVIAR NOTIFICAÇÃO (Seleção/Destino)
     const cellIndex = this.uiCoordToServerIndex(r, c);
     const { nick, password } = creds;
     
@@ -105,11 +104,9 @@ export class OnlineGame {
 
     if (res.error) {
       this.ui.addMessage("System", `Move error: ${res.error}`);
-      // Limpa os destaques para permitir que o utilizador tente selecionar outra peça/destino
+      // Limpa os destaques para que o jogador tente outra seleção após o erro 400
       this.ui.clearHighlights(true);
     }
-    
-    // O sucesso será gerido pelo próximo handleUpdate
   }
 
   handleUpdate(data) {
@@ -145,19 +142,21 @@ export class OnlineGame {
     }
     if (data.step !== undefined) {
       this.step = data.step;
-      // Limpa destaques após o servidor processar um passo (opcional, mas seguro)
       this.ui.clearHighlights(false); 
     }
     
-    // 2) Animação do Dado e Mensagem
+    // 2) Animação do Dado e Mensagem (CORREÇÃO [OBJECT OBJECT])
     if (this.dice !== previousDice && this.dice !== null && this.dice !== undefined) {
-      // O dado mudou e tem valor (i.e., foi rolado)
+      
+      const diceValue = Number(this.dice); 
+      
       const symbols = ["••••", "⎮•••", "⎮⎮••", "⎮⎮⎮•", "⎮⎮⎮⎮"];
-      const upCount = (this.dice === 6) ? 0 : this.dice; 
+      const upCount = (diceValue === 6) ? 0 : diceValue; 
       const symbol = symbols[upCount]; 
       
-      this.ui.animateSticks(symbol, this.dice, false);
-      this.ui.addMessage("System", `Sticks rolled: ${this.dice}`);
+      // O valor enviado para a UI é o número, resolvendo o erro visual
+      this.ui.animateSticks(symbol, diceValue, false);
+      this.ui.addMessage("System", `Sticks rolled: ${diceValue}`); 
     }
 
     // 3) Mensagens de início de jogo / mudança de vez
@@ -179,7 +178,7 @@ export class OnlineGame {
       } else {
         this.ui.addMessage("System", "Game ended without a winner.");
       }
-      this.cleanup(); // fecha o EventSource e desativa botões
+      this.cleanup();
     }
   }
 
@@ -202,26 +201,19 @@ export class OnlineGame {
         return false;
     }
 
-    // O jogador só pode rolar se for a sua vez E o dado ainda não tiver sido rolado.
     const isMyTurn = this.currentTurn === creds.nick;
     const diceNotRolled = this.dice === null || this.dice === undefined;
     
     if (isMyTurn && !diceNotRolled) {
-        // Mensagem para evitar cliques desnecessários
         this.ui.addMessage("System", "You already rolled the sticks this turn.");
     }
 
-    // Retorna true se for a minha vez E o dado ainda não foi rolado
     return isMyTurn && diceNotRolled;
   }
 
 
   canPass() {
     const creds = this.ui.getCredentials();
-    // Só posso passar se: 
-    // 1. Estiver autenticado e no jogo.
-    // 2. For a minha vez.
-    // 3. O servidor tiver enviado que eu SOU O OBRIGADO a passar (mustPass)
     if (!creds || !this.gameId) return false;
     return this.currentTurn === creds.nick && this.mustPass === creds.nick;
   }
@@ -229,7 +221,6 @@ export class OnlineGame {
   // === MAPEAMENTO PIECES[] -> MATRIZ PARA UI ===
 
   serverIndexToUICoord(idx) {
-    // server: 0 = canto inferior direito, visto pelo inicial
     const size = this.size;
     const rowFromBottom = Math.floor(idx / size); // 0 = bottom row
     const colFromRight = idx % size;             // 0 = rightmost col
@@ -250,20 +241,17 @@ export class OnlineGame {
   renderBoardFromPieces() {
     if (!this.pieces) return;
 
-    // cria matriz 4 x size com as mesmas estruturas que TabGame usa
     const matrix = Array.from({ length: 4 }, () => Array(this.size).fill(null));
 
     this.pieces.forEach((p, idx) => {
       if (!p) return;
       const { r, c } = this.serverIndexToUICoord(idx);
 
-      // adaptamos color "Blue"/"Red" para "G"/"B"
       const player = p.color === "Blue" ? "G" : "B"; 
       matrix[r][c] = { player, type: p.reachedLastRow ? "final" : (p.inMotion ? "moved" : "initial") };
     });
 
-    // currentPlayer: quem tem a vez
-    // Usamos o nick do jogador que tem a vez (currentTurn) para a UI realçar
     this.ui.renderBoard(matrix, this.currentTurn, (r, c) => this.handleCellClick(r, c));
   }
 }
+
