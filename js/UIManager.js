@@ -224,28 +224,74 @@ export class UIManager {
     this.leaderboard.sort((a, b) => b.piecesLeft - a.piecesLeft);
     localStorage.setItem("tab_leaderboard", JSON.stringify(this.leaderboard));
 
-    this.renderLeaderboard();
+    // Renderiza a lista local
+    this.renderLeaderboard(this.leaderboard); 
   }
 
   loadLeaderboard() {
     const saved = localStorage.getItem("tab_leaderboard");
     if (saved) this.leaderboard = JSON.parse(saved);
-    this.renderLeaderboard();
+    // Renderiza a lista local
+    this.renderLeaderboard(this.leaderboard); 
   }
 
-  renderLeaderboard() {
+  /**
+   * Renderiza a tabela de classificação com dados do servidor ou local.
+   * @param {Array} rankingList Lista de objetos de classificação.
+   */
+  renderLeaderboard(rankingList) {
     if (!this.tableBody) return;
     this.tableBody.innerHTML = "";
 
-    this.leaderboard.forEach((rec, idx) => {
+    // Ordena por Vitórias (se for do servidor) ou Peças restantes (se for local)
+    rankingList.sort((a, b) => {
+        const scoreA = a.victories !== undefined ? a.victories : a.piecesLeft;
+        const scoreB = b.victories !== undefined ? b.victories : b.piecesLeft;
+        return scoreB - scoreA;
+    });
+
+    rankingList.forEach((rec, idx) => {
       const tr = document.createElement("tr");
+      // Se tiver 'victories', é do servidor, mostra as vitórias em vez da data
+      const firstColContent = rec.victories !== undefined ? `W: ${rec.victories}` : rec.date;
+
       tr.innerHTML = `
-        <td>${rec.date}</td>
+        <td>${firstColContent}</td>
         <td>${rec.winner}${idx === 0 ? " 🏆" : ""}</td>
         <td>${rec.piecesLeft}</td>
       `;
       this.tableBody.appendChild(tr);
     });
+  }
+
+  /**
+   * Obtém e renderiza a tabela classificativa do servidor.
+   * @param {number} group ID do grupo.
+   * @param {number} size Tamanho do tabuleiro.
+   */
+  async fetchAndRenderServerRanking(group, size) {
+    // Importa dinamicamente para usar a função de ranking
+    const { getRanking } = await import("./ServerAPI.js");
+
+    this.addMessage("System", "Fetching online ranking...");
+    const res = await getRanking(group, size);
+
+    if (res.error) {
+        this.addMessage("System", `Error fetching ranking: ${res.error}. Showing local scores.`);
+        this.renderLeaderboard(this.leaderboard);
+        return;
+    }
+
+    // Adapta os dados do servidor para o formato de renderização
+    const serverRanking = res.ranking.map(r => ({
+        winner: r.nick,
+        piecesLeft: r.pieces, // Peças restantes no jogo com melhor score
+        victories: r.victories,
+        date: "SERVER",
+    }));
+
+    this.renderLeaderboard(serverRanking); 
+    this.addMessage("System", `Online ranking loaded (${serverRanking.length} records).`);
   }
 
   // Visibilidade do nível de IA
