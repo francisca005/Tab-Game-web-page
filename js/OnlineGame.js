@@ -3,6 +3,7 @@ import { GROUP_ID, join, leave, roll, notify, passTurn, openUpdateStream } from 
 import { TabGame } from "./TabGame.js"; 
 import { Piece } from "./Piece.js"; 
 
+
 export class OnlineGame {
   constructor(ui) {
     this.ui = ui;
@@ -18,36 +19,31 @@ export class OnlineGame {
     this.winner = null;
     this.players = null; // Mapa Nick -> Color do Servidor
 
-    // FIX: Criar Logic Helper (TabGame) para validação de regras no cliente
-    // Usamos um objeto UI dummy para que o helper não interaja com o DOM/Chat
+    // 1. Adição e Configuração do logicHelper (usa a classe TabGame para as regras)
     const dummyUi = {
         addMessage: () => {}, 
         updateCounts: () => {},
         refreshRollButton: () => {},
         setRollEnabled: () => {},
         modeSelect: { value: 'pvp_online' },
+        aiLevelSelect: { value: 'easy' }, 
     };
     this.logicHelper = new TabGame(dummyUi); 
-
-    // Estado interno para gerir a jogada em dois passos (seleção UI)
-    this.selectedCell = null;      // índice do servidor da célula selecionada
-    this.selectedUiCoord = null;   // {r, c} da célula selecionada
   }
 
-  // FIX: Sincroniza o TabGame Helper com o estado do servidor
+  // 2. Criação de syncLogicHelper()
   syncLogicHelper() {
-    if (!this.pieces || !this.currentTurn || !this.dice) return;
+    if (!this.pieces || !this.currentTurn || !this.dice || !this.players) return;
 
-    // 1. Sincronizar Board (conversão de array de objetos simples para instâncias de Piece)
+    // Converte os dados simples do servidor para instâncias de Piece para que o TabGame
+    // possa aplicar as regras de movimento (type/moved/wasOnLastRow).
     this.logicHelper.board = this.pieces.map((p, idx) => {
         if (!p) return null;
         
-        // Mapear de volta a estrutura de Piece para o TabGame.js
-        const piece = new Piece(p.color === "Blue" ? "G" : "B");
+        const piece = new Piece(p.color === "Blue" ? "G" : "B"); 
         piece.moved = p.inMotion;
         piece.wasOnLastRow = p.reachedLastRow;
         
-        // TabGame.js usa 'type' para CSS, mas os flags 'moved'/'wasOnLastRow' são essenciais para as regras
         if (p.reachedLastRow) piece.type = "final";
         else if (p.inMotion) piece.type = "moved";
         else piece.type = "initial";
@@ -55,18 +51,36 @@ export class OnlineGame {
         return piece;
     });
 
-    // 2. Sincronizar Jogador Atual (precisa ser em G/B)
     const turnColor = this.players[this.currentTurn];
     this.logicHelper.currentPlayer = turnColor === "Blue" ? "G" : "B";
-    
-    // 3. Sincronizar o Roll
     this.logicHelper.currentRoll = this.dice.value;
     this.logicHelper.cols = this.size; 
+  }
+  
+  // 3. Implementação de checkAnyValidMove()
+  checkAnyValidMove() {
+      const player = this.logicHelper.currentPlayer;
+      const board = this.logicHelper.board;
+      const roll = this.logicHelper.currentRoll;
+
+      if (!roll) return false;
+
+      for (let i = 0; i < board.length; i++) {
+          const piece = board[i];
+          if (!piece || piece.player !== player) continue;
+          
+          if (!this.logicHelper.canMovePiece(piece)) continue;
+
+          const targets = this.logicHelper.validTargetsFrom(i);
+          if (targets.length > 0) return true;
+      }
+      return false;
   }
 
   async start(cols) {
     this.size = cols;
     this.logicHelper.cols = cols; 
+    this.logicHelper.init(cols, "Gold"); 
 
     const creds = this.ui.getCredentials();
     if (!creds) {
@@ -86,7 +100,6 @@ export class OnlineGame {
     this.gameId = res.game;
     this.ui.addMessage("System", `Joined game ${this.gameId}. Waiting for opponent...`);
 
-    // Abre o canal update
     this.eventSource = openUpdateStream(
       nick,
       this.gameId,
@@ -94,7 +107,6 @@ export class OnlineGame {
       () => this.ui.addMessage("System", "Connection lost to server (update).")
     );
 
-    // Botões
     this.ui.onThrow = () => this.handleRoll();
     this.ui.onQuit = () => this.handleLeave();
     this.ui.onPass = () => this.handlePass();
@@ -123,24 +135,29 @@ export class OnlineGame {
     this.ui.addMessage("System", "Left online game.");
   }
 
+  // 4. Lógica de handlePass() Corrigida
   async handlePass() {
-    // FIX: Sincronizar antes de validar a regra de Skip
+    const credentials = this.ui.getCredentials();
+    if (this.currentTurn !== credentials?.nick) {
+        this.ui.addMessage("System", "Error: It's not your turn.");
+        return;
+    }
+
     this.syncLogicHelper();
     
-    // Verifica se existe algum movimento válido com o roll atual
-    const hasValidMoves = this.logicHelper.validMovesExist();
-    
-    if (hasValidMoves) {
+    // Bloqueia se houver movimentos válidos (Regra do Tâb)
+    if (this.logicHelper.currentRoll && this.checkAnyValidMove()) {
         this.ui.addMessage("System", "Error: You cannot skip your turn if you have valid moves available.");
         return;
     }
     
+    // Validação se o servidor permite skip (mustPass)
     if (!this.canPass()) {
-      this.ui.addMessage("System", "Cannot skip turn right now.");
+      this.ui.addMessage("System", "Cannot skip turn right now (server state does not require a skip).");
       return;
     }
     
-    const { nick, password } = this.ui.getCredentials();
+    const { nick, password } = credentials;
     this.ui.addMessage("System", `${nick} is skipping turn...`);
     const res = await passTurn(nick, password, this.gameId);
     if (res.error) {
@@ -149,7 +166,7 @@ export class OnlineGame {
   }
 
 
-  // FIX: Lógica de dois passos (origem -> destino)
+  // 5. Simplificação de handleCellClick()
   async handleCellClick(r, c) {
     const credentials = this.ui.getCredentials();
     if (this.currentTurn !== credentials?.nick) {
@@ -161,103 +178,58 @@ export class OnlineGame {
         return;
     }
     
-    // Sincronizar o helper para usar as regras atuais antes de cada clique
     this.syncLogicHelper(); 
 
     const cellIndex = this.uiCoordToServerIndex(r, c);
     const { nick, password } = credentials;
     
-    // --- STEP 'from' --- (Seleção da peça de origem)
+    // --- STEP 'from' (Validação no Cliente) ---
     if (this.step === 'from') {
-        const piece = this.logicHelper.board[cellIndex]; // Usar o helper para verificar a peça
+        const piece = this.logicHelper.board[cellIndex]; 
         const playerColor = this.players[nick];
+        const isPlayerG = playerColor === "Blue"; 
         
-        // 1. Cliente-side validation (Tâb rule e Dono da Peça)
-        const isPlayersPiece = piece && piece.player === (playerColor === "Blue" ? "G" : "B");
+        // Verifica se a peça pertence ao jogador e se a casa está ocupada
+        const isPlayersPiece = piece && piece.player === (isPlayerG ? "G" : "B");
         if (!isPlayersPiece) {
-            this.ui.addMessage("System", "Move error: Not your piece or cell is empty.");
+            this.ui.clearHighlights(true);
             return;
         }
         
-        // Utilizar a regra Tâb do TabGame.js
+        // Validação da regra Tâb (só pode mover peças iniciais com roll=1)
         if (!this.logicHelper.canMovePiece(piece)) {
              this.ui.addMessage("System", `Move error: Must be a Tâb (1) roll to move initial pieces.`);
              return;
         }
         
-        // Calcular targets e só notificar se houver movimentos válidos
+        // Validação se existem alvos válidos para o roll atual
         const targets = this.logicHelper.validTargetsFrom(cellIndex);
         if (targets.length === 0) {
             this.ui.addMessage("System", `Move error: No valid moves with roll ${this.dice.value} from this piece.`);
             return;
         }
 
-        // 2. Enviar a notificação para o servidor
+        // Se passar nas validações do cliente, notifica o servidor (para avançar para 'to')
+        this.ui.addMessage("System", "Notifying server of piece selection...");
         const res = await notify(nick, password, this.gameId, cellIndex);
         if (res.error) {
             this.ui.addMessage("System", `Server Move error: ${res.error}`);
             this.ui.clearHighlights(true);
-            this.selectedCell = null;
-            this.selectedUiCoord = null;
             return;
         }
-
-        // 3. Se o servidor aceitou, atualizamos o estado UI e destacamos
-        this.selectedCell = cellIndex;
-        this.selectedUiCoord = {r, c};
-        this.highlightSelection(r, c, true); 
-        this.highlightTargets(targets); // Destacar os alvos
-        this.ui.addMessage("System", "Piece selected. Choose destination.");
     } 
-    // --- STEP 'to' --- (Seleção da peça de destino)
+    // --- STEP 'to' ---
     else if (this.step === 'to') {
-        // Validação rápida do cliente antes de enviar
-        const validTargets = this.logicHelper.validTargetsFrom(this.selectedCell);
-        const targetIsLocalValid = validTargets.some(idx => idx === cellIndex);
-
-        if (!targetIsLocalValid) {
-            this.ui.addMessage("System", "Move error: Invalid destination for selected piece.");
-            return;
-        }
-
-        // 2. Enviar a notificação para o servidor
+        // Envia o destino. A validação completa do movimento é feita no servidor.
+        this.ui.addMessage("System", "Notifying server of destination selection...");
         const res = await notify(nick, password, this.gameId, cellIndex);
         if (res.error) {
             this.ui.addMessage("System", `Server Move error: ${res.error}`);
             return;
         }
-        
-        // 3. Se o servidor aceitou, limpamos a seleção (o servidor enviará a nova board no update)
-        this.selectedCell = null;
-        this.selectedUiCoord = null;
-        this.ui.clearHighlights(true);
     }
   }
   
-  // Função auxiliar para gerir o highlight da peça selecionada
-  highlightSelection(r, c, isSelected) {
-    const boardEl = this.ui.boardEl;
-    if (!boardEl) return;
-    const index = r * this.size + c;
-    const el = boardEl.children[index];
-    
-    boardEl.querySelectorAll(".cell.selected").forEach(e => e.classList.remove("selected"));
-    
-    if (isSelected && el) {
-        el.classList.add("selected");
-    }
-  }
-
-  // Nova função para destacar alvos, usando a função adaptada do UIManager
-  highlightTargets(targets) {
-    // Converte os índices do servidor/helper para coordenadas {r, c} da UI
-    const uiTargets = targets.map(idx => this.serverIndexToUICoord(idx));
-    
-    // O UIManager.js foi ajustado para receber targets como {r, c}
-    this.ui.highlightTargets(uiTargets);
-  }
-
-
   refreshSkipButton() {
     const skipBtn = this.ui.skipBtn;
     if (!skipBtn) return;
@@ -269,20 +241,19 @@ export class OnlineGame {
   }
 
 
-
+  // 6. Centralização do Highlight em handleUpdate()
   handleUpdate(data) {
         console.log("[UPDATE from server]", data);
 
         if (data.error) {
             this.ui.addMessage("System", `Server error: ${data.error}`);
-            // Se houver um erro, é seguro fechar o canal SSE
             this.cleanup();
             return;
         }
 
         const previousTurn = this.currentTurn;
 
-        // 1) Atualizar estado do jogo (pieces, initial, players)
+        // 1) Atualizar estado do jogo e renderizar
         if (data.pieces) {
             this.pieces = data.pieces;
             this.initialNick = data.initial ?? this.initialNick;
@@ -290,7 +261,7 @@ export class OnlineGame {
             this.renderBoardFromPieces();
         }
 
-        // 2) Atualizar o passo de movimento (step) e o estado do turno (turn/mustPass)
+        // 2) Atualizar o estado do turno
         if (data.step !== undefined) {
             this.step = data.step;
         }
@@ -301,40 +272,43 @@ export class OnlineGame {
             this.mustPass = data.mustPass;
         }
 
-        // 3) Lógica de Destaques Visuais (Seleção/Alvos)
-        // Limpamos sempre tudo antes de aplicar novos destaques
+        // 3) Lógica de Destaques Visuais (após o render)
         this.ui.clearHighlights(true); 
 
-        if (data.selected) {
-            // Converte os índices 1D do servidor para coordenadas de UI {r, c}
-            const uiCoords = data.selected.map(idx => this.serverIndexToUICoord(idx));
-
-            // Aplica o destaque de seleção (A peça selecionada é geralmente o primeiro índice)
-            if (uiCoords.length > 0) {
-                const selectedCoord = uiCoords[0];
-                const selectedIndex = selectedCoord.r * this.size + selectedCoord.c; // Índice 1D da UI
-                
-                const selectedEl = this.ui.boardEl.children[selectedIndex];
-                if (selectedEl) {
-                    selectedEl.classList.add("selected");
-                }
-            }
+        if (data.selected && data.selected.length > 0) {
             
-            // Aplica o destaque de alvos. Se o passo é 'to' ou 'take', os restantes elementos são alvos.
+            this.syncLogicHelper();
+            
+            const selectedIndex = data.selected[0];
+            const selectedCoord = this.serverIndexToUICoord(selectedIndex);
+            
+            const selectedUiIndex = selectedCoord.r * this.size + selectedCoord.c; 
+            const selectedEl = this.ui.boardEl?.children[selectedUiIndex];
+            
+            // Destacar a peça selecionada
+            if (selectedEl) {
+                selectedEl.classList.add("selected");
+            }
+
+            // Destacar alvos
             if (this.step === 'to' || this.step === 'take') {
-                const targets = uiCoords.slice(1);
-                this.ui.highlightTargets(targets); // Assume que highlightTargets recebe [{r, c}, ...]
+                // Usa as regras do TabGame para calcular os alvos, garantindo a precisão no cliente
+                const targetsServerIndices = this.logicHelper.validTargetsFrom(selectedIndex);
+                
+                const uiTargets = targetsServerIndices.map(idx => this.serverIndexToUICoord(idx));
+                
+                this.ui.highlightTargets(uiTargets);
             }
         }
 
+
         // 4) Notificações de Jogada e Dado
         if (data.cell !== undefined) {
-            this.ui.addMessage("System", `Move notified on cell ${data.cell}. Next step: ${this.step}.`);
+            this.ui.addMessage("System", `Move confirmed on server. Next action: ${this.step}.`);
         }
 
         if (data.dice !== undefined) {
             this.dice = data.dice;
-            // Animação dos paus (seu código original, ligeiramente simplificado)
             if (this.dice) {
                 const rollValue = data.dice.value;
                 const sticks = data.dice.stickValues;
@@ -363,7 +337,7 @@ export class OnlineGame {
             } else {
                 this.ui.addMessage("System", "Game ended without a winner.");
             }
-            this.cleanup(); // Fecha o EventSource
+            this.cleanup();
         }
 
         // 7) Atualizar Botões (sempre no final)
@@ -447,10 +421,6 @@ export class OnlineGame {
     }
 
     this.ui.renderBoard(matrix, currentPlayer, (r, c) => this.handleCellClick(r, c));
-    
-    // Garantir que a peça selecionada é re-destacada após o render
-    if (this.selectedUiCoord) {
-        this.highlightSelection(this.selectedUiCoord.r, this.selectedUiCoord.c, true);
-    }
   }
+
 }
