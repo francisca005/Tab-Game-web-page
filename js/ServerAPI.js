@@ -1,6 +1,6 @@
 // js/ServerAPI.js
 const BASE_URL = "http://twserver.alunos.dcc.fc.up.pt:8008";
-export const GROUP_ID = 32;
+export const GROUP_ID = 32; // 
 
 async function post(path, body) {
   const res = await fetch(`${BASE_URL}/${path}`, {

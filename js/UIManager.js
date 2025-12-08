@@ -1,5 +1,5 @@
 // js/UIManager.js
-import { register } from "./ServerAPI.js";
+import { register, getRanking, GROUP_ID } from "./ServerAPI.js";
 
 export class UIManager {
   constructor() {
@@ -26,7 +26,7 @@ export class UIManager {
     this.aiLevelSelect = document.getElementById("aiLevel");
     this.aiLevelGroup = document.getElementById("aiLevelGroup");
 
-    // Login visual(não funcional)
+    // Login
     this.loginBtn = document.querySelector(".login-btn");
     this.logoutBtn = document.querySelector(".logout-btn");
     this.loginForm = document.querySelector(".login-form");
@@ -34,7 +34,7 @@ export class UIManager {
     this.passInput = document.querySelector(".pass-input");
     this.welcomeText = document.querySelector(".welcome-text");
 
-    // Credenciais (FIX: inicializadas aqui)
+    // Credenciais
     this.nick = null;
     this.password = null;
 
@@ -42,22 +42,23 @@ export class UIManager {
     this.leaderboard = [];
     this.tableBody = document.querySelector(".classifications tbody");
 
-    // Callbacks configuráveis (definidas pelo jogo principal)
+    // Callbacks configuráveis
     this.onThrow = null;
     this.onQuit = null;
+    this.onPass = null;
     this.onGoToGame = null;
     this.onConfigChange = null;
-    this.onPass = null;
   }
 
-  //Inicialização e listeners 
+  // Inicialização e listeners 
   initListeners() {
     // Botões principais
     this.throwBtn?.addEventListener("click", () => this.onThrow?.());
     this.quitBtn?.addEventListener("click", () => this.onQuit?.());
-
     this.skipBtn?.addEventListener("click", () => {
-      this.onPass?.();
+      if (!this.skipBtn.disabled) {
+        this.onPass?.();
+      }
     });
 
     // Navegar para as configurações
@@ -89,67 +90,88 @@ export class UIManager {
     this.loadLeaderboard();
   }
 
-  // Login visual + autenticação no servidor
+  // Login REAL usando /register no servidor
   initLogin() {
     if (!this.loginBtn || !this.logoutBtn) return;
 
+    // Estado inicial
+    this.logoutBtn.disabled = true;
+    this.loginForm.classList.add("hidden");
+    this.welcomeText.classList.add("hidden");
+
     this.loginBtn.addEventListener("click", async () => {
-      // 1) Se o formulário ainda está escondido, só o mostramos e saímos
+      // 1º clique → mostra o formulário
       if (this.loginForm.classList.contains("hidden")) {
         this.loginForm.classList.remove("hidden");
         this.userInput.focus();
         return;
       }
 
-      // 2) Form já está visível → tentar autenticar
+      // 2º clique → autentica
       const nick = this.userInput.value.trim();
       const pass = this.passInput.value.trim();
 
       if (!nick || !pass) {
-        this.addMessage("System", "Please enter a user and password.");
+        this.addMessage("System", "⚠️ Please fill both user and password.");
         return;
       }
 
-      this.addMessage("System", "Registering / logging in on server...");
-      // FIX: Adicionado uso de `register` que estava em falta
-      const res = await register(nick, pass);
-
-      if (res.error) {
-        this.addMessage("System", `Auth error: ${res.error}`);
-        return;
-      }
-
-      // Sucesso
-      this.nick = nick;
-      this.password = pass;
-
-      this.loginForm.classList.add("hidden");
       this.loginBtn.disabled = true;
-      this.logoutBtn.disabled = false;
-      this.welcomeText.textContent = `Welcome, ${nick}!`;
-      this.welcomeText.classList.remove("hidden");
+      this.addMessage("System", `🔐 Authenticating '${nick}'...`);
 
-      this.addMessage("System", "Authentication succeeded on server.");
+      try {
+        const res = await register(nick, pass);
+        
+        if (res.error) {
+          this.addMessage("System", `❌ Auth error: ${res.error}`);
+          this.loginBtn.disabled = false;
+          return;
+        }
+
+        this.nick = nick;
+        this.password = pass;
+
+        this.loginForm.classList.add("hidden");
+        this.loginBtn.disabled = true;
+        this.logoutBtn.disabled = false;
+
+        if (this.welcomeText) {
+          this.welcomeText.textContent = `Welcome, ${nick}!`;
+          this.welcomeText.classList.remove("hidden");
+        }
+
+        this.addMessage("System", `✅ Logged in as '${nick}'`);
+      } catch (err) {
+        this.addMessage("System", `❌ Authentication error: ${err.message}`);
+      } finally {
+        this.loginBtn.disabled = false;
+      }
     });
 
+    // Logout
     this.logoutBtn.addEventListener("click", () => {
       this.nick = null;
       this.password = null;
+
+      this.userInput.value = "";
+      this.passInput.value = "";
+
+      this.welcomeText.textContent = "";
+      this.welcomeText.classList.add("hidden");
+
       this.loginBtn.disabled = false;
       this.logoutBtn.disabled = true;
-      this.welcomeText.classList.add("hidden");
-      this.addMessage("System", "Logged out (server auth forgotten).");
+
+      this.addMessage("System", "👋 Logged out.");
     });
   }
-
 
   getCredentials() {
     if (!this.nick || !this.password) return null;
     return { nick: this.nick, password: this.password };
   }
 
-
-  //Chat 
+  // Chat 
   addMessage(sender, text) {
     const p = document.createElement("p");
     p.innerHTML = `<strong>${sender}:</strong> ${text}`;
@@ -165,7 +187,6 @@ export class UIManager {
 
   // Renderização do tabuleiro 
   renderBoard(boardState, currentPlayer, onCellClick) {
-    console.log("UIManager.renderBoard called", { currentPlayer, flatBoard: boardState.flat() });
     this.boardEl.innerHTML = "";
 
     this.cols = boardState[0].length;
@@ -177,7 +198,7 @@ export class UIManager {
         div.className = "cell";
         div.dataset.row = r;
         div.dataset.col = c;
-
+        
         if (cell?.player) {
           const piece = document.createElement("div");
           piece.classList.add("chip", cell.player === "G" ? "gold" : "black");
@@ -190,12 +211,11 @@ export class UIManager {
       });
     });
 
+    // Atualiza status visual do jogador ativo
     document.querySelectorAll(".status-bar span").forEach(el => el.classList.remove("active"));
     const active = currentPlayer === "G" ? this.goldCounter : this.blackCounter;
     active?.classList.add("active");
   }
-
-
 
   // Destaques no tabuleiro
   clearHighlights(alsoSelected = false) {
@@ -204,9 +224,9 @@ export class UIManager {
       this.boardEl.querySelectorAll(".cell.selected").forEach(el => el.classList.remove("selected"));
   }
 
-   highlightTargets(targets) {
+  highlightTargets(targets) {
     targets.forEach(({ r, c }) => {
-      const index = r * (this.cols) + c;
+      const index = r * this.cols + c;
       const el = this.boardEl.children[index];
       if (el) el.classList.add("target");
     });
@@ -224,39 +244,23 @@ export class UIManager {
     this.leaderboard.sort((a, b) => b.piecesLeft - a.piecesLeft);
     localStorage.setItem("tab_leaderboard", JSON.stringify(this.leaderboard));
 
-    // Renderiza a lista local
-    this.renderLeaderboard(this.leaderboard); 
+    this.renderLeaderboard();
   }
 
   loadLeaderboard() {
     const saved = localStorage.getItem("tab_leaderboard");
     if (saved) this.leaderboard = JSON.parse(saved);
-    // Renderiza a lista local
-    this.renderLeaderboard(this.leaderboard); 
+    this.renderLeaderboard();
   }
 
-  /**
-   * Renderiza a tabela de classificação com dados do servidor ou local.
-   * @param {Array} rankingList Lista de objetos de classificação.
-   */
-  renderLeaderboard(rankingList) {
+  renderLeaderboard() {
     if (!this.tableBody) return;
     this.tableBody.innerHTML = "";
 
-    // Ordena por Vitórias (se for do servidor) ou Peças restantes (se for local)
-    rankingList.sort((a, b) => {
-        const scoreA = a.victories !== undefined ? a.victories : a.piecesLeft;
-        const scoreB = b.victories !== undefined ? b.victories : b.piecesLeft;
-        return scoreB - scoreA;
-    });
-
-    rankingList.forEach((rec, idx) => {
+    this.leaderboard.forEach((rec, idx) => {
       const tr = document.createElement("tr");
-      // Se tiver 'victories', é do servidor, mostra as vitórias em vez da data
-      const firstColContent = rec.victories !== undefined ? `W: ${rec.victories}` : rec.date;
-
       tr.innerHTML = `
-        <td>${firstColContent}</td>
+        <td>${rec.date}</td>
         <td>${rec.winner}${idx === 0 ? " 🏆" : ""}</td>
         <td>${rec.piecesLeft}</td>
       `;
@@ -264,34 +268,55 @@ export class UIManager {
     });
   }
 
-  /**
-   * Obtém e renderiza a tabela classificativa do servidor.
-   * @param {number} group ID do grupo.
-   * @param {number} size Tamanho do tabuleiro.
-   */
-  async fetchAndRenderServerRanking(group, size) {
-    // Importa dinamicamente para usar a função de ranking
-    const { getRanking } = await import("./ServerAPI.js");
+  // Ranking do servidor
+  async fetchAndRenderServerRanking() {
+    const size = Number(this.sizeInput.value) || 9;
+    const container = document.getElementById("classificationsTableContainer");
+    
+    container.innerHTML = "<p>🔄 Fetching ranking from server...</p>";
 
-    this.addMessage("System", "Fetching online ranking...");
-    const res = await getRanking(group, size);
+    try {
+      const res = await getRanking(GROUP_ID, size);
 
-    if (res.error) {
-        this.addMessage("System", `Error fetching ranking: ${res.error}. Showing local scores.`);
-        this.renderLeaderboard(this.leaderboard);
+      if (res.error) {
+        container.innerHTML = `<p>❌ Error: ${res.error}</p>`;
         return;
+      }
+
+      if (!res.ranking || res.ranking.length === 0) {
+        container.innerHTML = `<p>📊 No games recorded yet for Group ${GROUP_ID} (size ${size}).</p>`;
+        return;
+      }
+
+      let tableHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nick</th>
+              <th>Victories</th>
+              <th>Games</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      res.ranking.forEach((player, index) => {
+        tableHTML += `
+          <tr>
+            <td>${index + 1}${index === 0 ? " 🏆" : ""}</td>
+            <td>${player.nick}</td>
+            <td>${player.victories}</td>
+            <td>${player.games}</td>
+          </tr>
+        `;
+      });
+
+      tableHTML += "</tbody></table>";
+      container.innerHTML = tableHTML;
+    } catch (err) {
+      container.innerHTML = `<p>❌ Error fetching ranking: ${err.message}</p>`;
     }
-
-    // Adapta os dados do servidor para o formato de renderização
-    const serverRanking = res.ranking.map(r => ({
-        winner: r.nick,
-        piecesLeft: r.pieces, // Peças restantes no jogo com melhor score
-        victories: r.victories,
-        date: "SERVER",
-    }));
-
-    this.renderLeaderboard(serverRanking); 
-    this.addMessage("System", `Online ranking loaded (${serverRanking.length} records).`);
   }
 
   // Visibilidade do nível de IA
@@ -316,7 +341,7 @@ export class UIManager {
     }
   }
 
-  // som 
+  // Som 
   playSound(url, vol = 0.3) {
     const audio = new Audio(url);
     audio.volume = vol;
@@ -325,33 +350,31 @@ export class UIManager {
 
   // Controlo do botão de lançamento 
   setRollEnabled(can) {
-    const rollBtn = document.querySelector(".throw-btn");
-    if (!rollBtn) return;
+    if (!this.throwBtn) return;
+    this.throwBtn.disabled = !can;
+    this.throwBtn.classList.toggle("enabled", can);
+  }
 
-    rollBtn.disabled = !can;
-    rollBtn.classList.toggle("enabled", can);
+  // Controlo do botão Skip
+  setSkipEnabled(can) {
+    if (!this.skipBtn) return;
+    this.skipBtn.disabled = !can;
+    this.skipBtn.classList.toggle("enabled", can);
   }
 
   refreshRollButton(game) {
-    const canRollMethod = game.canRoll;
-
-    // FIX: Corrigido o erro de regressão. Agora verifica se é OnlineGame (via canRoll)
-    // ou se é local (com a lógica original).
-    const isOnline = canRollMethod !== undefined && typeof canRollMethod === 'function';
-    let can;
-
-    if (isOnline) {
-      // OnlineGame logic: uses canRoll()
-      can = game.canRoll();
+    // Verifica se é TabGame (local) ou OnlineGame
+    if (typeof game.canRoll === 'function') {
+      // OnlineGame - usa método canRoll()
+      const can = game.canRoll && game.canRoll();
+      this.setRollEnabled(can);
     } else {
-      // TabGame (local/PvC) logic (Lógica original)
-      can =
+      // TabGame - usa lógica de propriedades
+      const can =
         !game.gameOver &&
         game.currentRoll === null &&
         (game.extraRollPending || game.turnRolls === 0);
+      this.setRollEnabled(can);
     }
-
-    this.setRollEnabled(can);
   }
-
 }

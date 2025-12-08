@@ -1,5 +1,5 @@
 // js/TabGame.js
-import { Piece } from "./piece.js";
+import { Piece } from "./Piece.js";
 import { AIPlayer } from "./AIPlayer.js";
 
 // Classe Principal — TabGame
@@ -14,17 +14,15 @@ export class TabGame {
     this.currentPlayer = "G";
     this.gameOver = false;
     this.isRolling = false;
-
+    this.ai = null; // Inicializa a AI como nula
 
     // Controlo de lançamentos por turno (pode haver vários por turno, 1/4/6 concedem novo lançamento)
-
     this.turnRolls = 0; // nº de lançamentos no turno atual
-
     this.extraRollPending = false; // true se o 1º lançamento foi 4/6 e ainda não foi usado
   }
 
   // Inicialização do Jogo
-  init(cols = 9, first = "Gold") {
+  init(cols = 9, first = "Gold", aiLevel = null) { // Agora aceita aiLevel
     this.cols = cols;
     this.rows = 4;
     this.currentPlayer = first === "Gold" ? "G" : "B";
@@ -42,6 +40,8 @@ export class TabGame {
     this.gameOver = false;
     this.turnRolls = 0;
     this.extraRollPending = false;
+    this.ui.setSkipEnabled(false); // Desativa o botão no início
+    this.ui.quitBtn.disabled = false; // Habilita o botão de desistir
 
     // Render inicial
     this.ui.clearHighlights(true);
@@ -50,17 +50,16 @@ export class TabGame {
     this.updateCounts();
     this.ui.addMessage("System", `${this.currentPlayer === "G" ? "Gold" : "Black"} begins!`);
 
-    // Cria IA se modo for Player vs Computer 
-    if (this.ui.modeSelect?.value === "pvc") {
-      const level = this.ui.aiLevelSelect?.value || "easy";
-      this.ai = new AIPlayer(level, this);
-      this.ui.addMessage("System", `AI (${level}) is ready.`);
+    // Cria IA se o nível for fornecido (modo PvC)
+    if (aiLevel) {
+      this.ai = new AIPlayer(aiLevel, this);
+      this.ui.addMessage("System", `AI (${aiLevel}) is ready.`);
+      if (this.currentPlayer === "B") {
+        setTimeout(() => this.ai.makeMove(), 800);
+      }
+    } else {
+        this.ai = null; 
     }
-    // === Se o modo for PvC e o primeiro jogador for a IA (Black) ===
-    if (this.ui.modeSelect?.value === "pvc" && this.currentPlayer === "B") {
-      setTimeout(() => this.ai.makeMove(), 800);
-    }
-
   }
 
   // Funções auxiliares 
@@ -172,43 +171,28 @@ export class TabGame {
           this.currentRoll = null;
           this.ui.refreshRollButton(this);
         } else {
-          // Nenhuma jogada e sem extra roll - jogador precisa clicar "Skip Turn"
-          this.ui.addMessage("System", `No valid moves available — skip turn.`);
+          // Nenhuma jogada e sem extra roll - FORÇADO A PASSAR A VEZ
+          this.ui.addMessage("System", `No valid moves available — forced to skip turn.`);
           this.currentRoll = null;
           this.ui.refreshRollButton(this);
 
-          if (this.ui.modeSelect?.value === "pvc" && this.currentPlayer === "B" && this.ai) {
+          // Se for AI
+          if (this.currentPlayer === "B" && this.ai) {
             this.ui.addMessage("System", "AI skips turn automatically (no valid moves).");
 
-            // Corrige flags para reativar o humano
             this.isRolling = false;
             this.currentRoll = null;
 
             setTimeout(() => {
-              this.switchTurn(); // passa o turno para o humano
-              this.ui.refreshRollButton(this); // atualiza botão
-              this.ui.setRollEnabled(true); // garante que o botão está ativo
+              this.switchTurn(); 
+              this.ui.refreshRollButton(this);
             }, 800);
 
             return;
           }
 
-
-          const skipBtn = document.querySelector(".skip-btn");
-          if (skipBtn) {
-            skipBtn.classList.add("enabled");
-            skipBtn.disabled = false;
-
-            // comportamento do clique
-            skipBtn.onclick = () => {
-              skipBtn.classList.remove("enabled");
-              skipBtn.disabled = true;
-              this.switchTurn();
-            };
-          } else {
-            // fallback automático
-            this.switchTurn();
-          }
+          // Para jogador Humano
+          this.ui.setSkipEnabled(true); 
         }
       }
 
@@ -342,19 +326,16 @@ export class TabGame {
       this.currentRoll = null;        // precisa estar a null para permitir novo roll
       this.ui.refreshRollButton(this);
 
-      // Se for IA (modo PvC), deixa que ela trate sozinha do novo lançamento
-      if (this.ui.modeSelect?.value === "pvc" && this.currentPlayer === "B" && this.ai) {
-        // Espera a animação anterior terminar completamente antes de novo roll
+      // Se for IA, deixa que ela trate sozinha do novo lançamento
+      if (this.currentPlayer === "B" && this.ai) {
         setTimeout(() => {
           this.ai.makeMove();
-        }, 1800); // 1.8s dá tempo suficiente para o overlay fechar
+        }, 1800); 
       }
 
       return;
 
     }
-
-
 
     //Fim de turno normal
     this.currentRoll = null;
@@ -370,19 +351,20 @@ export class TabGame {
     // reset do controlo de rolls por turno
     this.turnRolls = 0;
     this.extraRollPending = false;
+    this.ui.setSkipEnabled(false); // Desativa o botão de passar
 
     this.render();
     this.ui.refreshRollButton(this);
 
     // Se for modo PvC e for a vez da IA (preto)
-    if (this.ui.modeSelect?.value === "pvc" && this.currentPlayer === "B" && this.ai) {
+    if (this.currentPlayer === "B" && this.ai) {
       setTimeout(() => this.ai.makeMove(), 800);
     }
-
   }
 
   // Fim de jogo 
   quitGame() {
+    this.ui.quitBtn.disabled = true;
     if (this.gameOver) return;
     const winner = this.currentPlayer === "G" ? "Black" : "Gold";
     this.endGameWithWinner(winner, "wins by resignation.");
@@ -394,11 +376,12 @@ export class TabGame {
     const winSpan = winner === "Gold" ? this.ui.goldCounter : this.ui.blackCounter;
     winSpan?.classList.add("win");
     const piecesLeft = this.countPieces(winner);
-    // Guarda no localStorage
+    // Guarda no localStorage (para valorização)
     if (window.recordGameResult) {
       window.recordGameResult(winner, piecesLeft, "—");
     }
     this.ui.updateLeaderboard(winner, piecesLeft, "—");
+    this.ui.quitBtn.disabled = true;
   }
 
   countPieces(winner) {

@@ -1,49 +1,54 @@
+// js/App.js
 import { UIManager } from "./UIManager.js";
 import { TabGame } from "./TabGame.js";
 import { OnlineGame } from "./OnlineGame.js";
 
-
 document.addEventListener("DOMContentLoaded", () => {
 
+  // Inicialização principal
   const ui = new UIManager();
   const localGame = new TabGame(ui);
   const onlineGame = new OnlineGame(ui);
+  
+  let activeGame = localGame; // Jogo ativo (local ou online)
 
-  // Variável para rastrear a instância de jogo atualmente ativa
-  let activeGame = localGame; 
-
-  // Os callbacks da UI chamam SEMPRE a instância ativa (localGame ou onlineGame)
-  ui.onThrow = () => activeGame.rollSticks(); // rollSticks existe nas duas classes
-  ui.onQuit  = () => activeGame.quitGame();   // quitGame/handleLeave existe nas duas classes
-  // FIX: onPass é definido APENAS quando o jogo online está ativo. Para o local, usa o evento interno do TabGame.
-  // Deixa-o a null para começar.
-
-  // onGoToGame escolhe o motor
+  // Configurações e eventos do jogo 
   ui.onGoToGame = ({ cols, mode, first, aiLevel }) => {
-    if (mode === "pvc" || mode === "pvp_local") {
-      // 1. Define o motor LOCAL como ativo
-      activeGame = localGame; 
-      
-      // 2. Inicializa o jogo
-      localGame.init(cols, first);
-      ui.addMessage("System", `New LOCAL game: ${mode}, first to play: ${first}.`);
+    // 1. Modo PvC (local)
+    if (mode === "pvc") {
+      activeGame = localGame;
 
-      // Limpa o onPass para garantir que o skip button é controlado pelo TabGame
-      ui.onPass = null; 
-      
-    } else if (mode === "pvp_online") {
-      // 1. Define o motor ONLINE como ativo
+      localGame.init(cols, first, aiLevel);
+      ui.addMessage(
+        "System",
+        `🎮 New LOCAL game (PvC): first to play: ${first}.`
+      );
+
+      // Callbacks do jogo local
+      ui.onThrow = () => activeGame.rollSticks();
+      ui.onQuit = () => activeGame.quitGame();
+      ui.onPass = () => {
+        activeGame.switchTurn();
+        ui.setSkipEnabled(false);
+      };
+    }
+    // 2. Modo PvP Online
+    else if (mode === "pvp_online") {
       activeGame = onlineGame;
-      
-      // 2. Inicializa o jogo online
-      ui.addMessage("System", "Starting ONLINE game...");
-      onlineGame.start(cols); // onlineGame irá definir seus próprios onThrow/onQuit/onPass internamente
-      // O OnlineGame.start() irá redefinir onThrow, onQuit e onPass, garantindo que o skip button funciona para o online.
+
+      ui.addMessage("System", "🌐 Starting ONLINE game...");
+      onlineGame.start(cols);
+
+      // Callbacks do jogo online
+      ui.onThrow = () => activeGame.handleRoll();
+      ui.onQuit = () => activeGame.quitGame();
+      ui.onPass = () => activeGame.handlePass();
     }
 
-    document.querySelector(".bottom")?.scrollIntoView({ behavior: "smooth" });
+    document.querySelector(".bottom")?.scrollIntoView({
+      behavior: "smooth",
+    });
   };
-
 
   ui.onConfigChange = () => ui.updateAIVisibility();
 
@@ -51,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ui.initListeners();
   ui.updateAIVisibility(); 
 
-  // Cria o tabuleiro inicial
+  // Cria o tabuleiro inicial (modo local por defeito)
   localGame.init(9, "Gold");
 
   // Modal de regras (PUSH-UP)
@@ -60,40 +65,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const ruleTitle = document.getElementById("ruleTitle");
   const ruleText = document.getElementById("ruleText");
   const ruleVideo = document.getElementById("ruleVideoModal");
-  const videoSource = ruleVideo.querySelector("source");
+  const videoSource = ruleVideo?.querySelector("source");
   const closeRuleBtn = document.querySelector(".close-rule");
 
   ruleItems.forEach(item => {
     const summary = item.querySelector("summary");
     summary.addEventListener("click", (e) => {
-      e.preventDefault(); 
+      e.preventDefault();
       const title = summary.textContent.trim();
       const textContainer = item.querySelector("div, p");
       const text = textContainer ? textContainer.innerHTML : "";
 
-      // define conteúdo no overlay
       ruleTitle.textContent = title;
       ruleText.innerHTML = text;
 
-      // define o vídeo correto (link absoluto no servidor)
       const rule = item.dataset.rule;
-      videoSource.src = `http://www.alunos.dcc.fc.up.pt/~up202303448/tab_videos/${rule}.mp4`;
+      if (videoSource) {
+        videoSource.src = `http://www.alunos.dcc.fc.up.pt/~up202303448/tab_videos/${rule}.mp4`;
+      }
 
-      ruleVideo.load();
-      ruleVideo.play();
+      if (ruleVideo) {
+        ruleVideo.load();
+        ruleVideo.play();
+      }
 
-      // mostra o overlay
       overlay.classList.remove("hidden");
     });
   });
 
   if (closeRuleBtn) {
     closeRuleBtn.addEventListener("click", () => {
-      ruleVideo.pause();
+      if (ruleVideo) ruleVideo.pause();
       overlay.classList.add("hidden");
     });
   }
-
 
   // Botão de ir para configurações
   const goToConfigBtn = document.getElementById("goToConfigBtn");
@@ -104,7 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
         .scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
-  // classificações - guarda resultados (Lógica de localStorage)  
+
+  // Classificações - guarda resultados  
   window.recordGameResult = function (winner, piecesLeft) {
     const result = {
       date: new Date().toISOString().split("T")[0],
@@ -117,69 +123,75 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("classifications", JSON.stringify(classifications));
   };
 
-    // Classificações - POPUP 
+  // Classificações - POPUP 
   const openClassificationsBtn = document.getElementById("openClassificationsBtn");
   const classificationsOverlay = document.getElementById("classificationsOverlay");
   const closeClassificationsBtn = document.querySelector(".close-classifications");
   const classificationsTableContainer = document.getElementById("classificationsTableContainer");
 
-  // ************************************************
-  // FUNÇÕES DE CLASSIFICAÇÃO MODIFICADAS/ADICIONADAS
-  // ************************************************
-  
-  // Helper para criar a estrutura da tabela com os cabeçalhos corretos (Wins/Date)
-  function createTableStructure(isServerRanking = true) {
-    const header1 = isServerRanking ? "Wins / Date" : "Date";
-    const header2 = "Winner";
-    const header3 = "Pieces Left";
+  function renderClassifications() {
+    const classifications = JSON.parse(localStorage.getItem("classifications")) || [];
 
-    return `
+    if (classifications.length === 0) {
+      classificationsTableContainer.innerHTML = "<p>No games played yet.</p>";
+      return;
+    }
+
+    classifications.sort((a, b) => {
+      const piecesA = parseInt(a.piecesLeft) || 0;
+      const piecesB = parseInt(b.piecesLeft) || 0;
+      return piecesB - piecesA;
+    });
+
+    let tableHTML = `
       <table>
         <thead>
           <tr>
-            <th>${header1}</th>
-            <th>${header2}</th>
-            <th>${header3}</th>
+            <th>Date</th>
+            <th>Winner</th>
+            <th>Pieces Left</th>
           </tr>
         </thead>
         <tbody>
-        </tbody>
-      </table>
     `;
+
+    classifications.forEach((c) => {
+      tableHTML += `
+        <tr>
+          <td>${c.date}</td>
+          <td>${c.winner}</td>
+          <td>${c.piecesLeft}</td>
+        </tr>
+      `;
+    });
+
+    tableHTML += "</tbody></table>";
+    classificationsTableContainer.innerHTML = tableHTML;
   }
-  
-  // Abertura do popup  
+
   if (openClassificationsBtn) {
-    openClassificationsBtn.addEventListener("click", () => {
+    openClassificationsBtn.addEventListener("click", async () => {
+      // Se estiver autenticado, mostra ranking do servidor
+      if (ui.nick && ui.password) {
+        await ui.fetchAndRenderServerRanking();
+      } else {
+        // Senão, mostra classificações locais
+        renderClassifications();
+        ui.addMessage("System", "Showing local results. Log in to see Server Ranking.");
+      }
       
-      // 1. Cria a estrutura da tabela (necessário antes de popular o tbody)
-      classificationsTableContainer.innerHTML = createTableStructure(true);
-
-      // 2. Chama a função do UIManager para buscar e preencher os dados do servidor (RANKING ONLINE)
-      const currentSize = Number(ui.sizeInput.value) || 9;
-      
-      // Importa o GROUP_ID (necessário para o ranking) e chama a função de fetch
-      import("./ServerAPI.js").then(({ GROUP_ID }) => {
-          ui.fetchAndRenderServerRanking(GROUP_ID, currentSize);
-      });
-
-      // 3. Mostra o overlay
       classificationsOverlay.classList.remove("hidden");
 
-      //Reaplica animação sempre que abre
       const popup = classificationsOverlay.querySelector(".classifications-popup");
       popup.classList.remove("animate-in", "animate-in-left"); 
-      void popup.offsetWidth; // reflow para reiniciar
+      void popup.offsetWidth;
       popup.classList.add("animate-in");                       
-      
     });
   }
-  // Fechar popup
+
   if (closeClassificationsBtn) {
     closeClassificationsBtn.addEventListener("click", () => {
       classificationsOverlay.classList.add("hidden");
     });
   }
- 
-
 });
