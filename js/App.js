@@ -13,6 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeGame = localGame; // Jogo ativo (local ou online)
 
   // Configurações e eventos do jogo 
+  ui.onThrow = () => activeGame.rollSticks ? activeGame.rollSticks() : activeGame.handleRoll();
+  ui.onQuit = () => activeGame.quitGame();
+
   ui.onGoToGame = ({ cols, mode, first, aiLevel }) => {
     // 1. Modo PvC (local)
     if (mode === "pvc") {
@@ -21,10 +24,9 @@ document.addEventListener("DOMContentLoaded", () => {
       localGame.init(cols, first, aiLevel);
       ui.addMessage(
         "System",
-        `🎮 New LOCAL game (PvC): first to play: ${first}.`
+        `New LOCAL game (PvC): first to play: ${first}.`
       );
 
-      // Callbacks do jogo local
       ui.onThrow = () => activeGame.rollSticks();
       ui.onQuit = () => activeGame.quitGame();
       ui.onPass = () => {
@@ -36,10 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (mode === "pvp_online") {
       activeGame = onlineGame;
 
-      ui.addMessage("System", "🌐 Starting ONLINE game...");
+      ui.addMessage("System", "Starting ONLINE game...");
       onlineGame.start(cols);
 
-      // Callbacks do jogo online
       ui.onThrow = () => activeGame.handleRoll();
       ui.onQuit = () => activeGame.quitGame();
       ui.onPass = () => activeGame.handlePass();
@@ -56,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ui.initListeners();
   ui.updateAIVisibility(); 
 
-  // Cria o tabuleiro inicial (modo local por defeito)
+  // Cria o tabuleiro inicial
   localGame.init(9, "Gold");
 
   // Modal de regras (PUSH-UP)
@@ -65,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const ruleTitle = document.getElementById("ruleTitle");
   const ruleText = document.getElementById("ruleText");
   const ruleVideo = document.getElementById("ruleVideoModal");
-  const videoSource = ruleVideo?.querySelector("source");
+  const videoSource = ruleVideo.querySelector("source");
   const closeRuleBtn = document.querySelector(".close-rule");
 
   ruleItems.forEach(item => {
@@ -80,14 +81,10 @@ document.addEventListener("DOMContentLoaded", () => {
       ruleText.innerHTML = text;
 
       const rule = item.dataset.rule;
-      if (videoSource) {
-        videoSource.src = `http://www.alunos.dcc.fc.up.pt/~up202303448/tab_videos/${rule}.mp4`;
-      }
+      videoSource.src = `http://www.alunos.dcc.fc.up.pt/~up202303448/tab_videos/${rule}.mp4`;
 
-      if (ruleVideo) {
-        ruleVideo.load();
-        ruleVideo.play();
-      }
+      ruleVideo.load();
+      ruleVideo.play();
 
       overlay.classList.remove("hidden");
     });
@@ -95,7 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (closeRuleBtn) {
     closeRuleBtn.addEventListener("click", () => {
-      if (ruleVideo) ruleVideo.pause();
+      ruleVideo.pause();
       overlay.classList.add("hidden");
     });
   }
@@ -170,16 +167,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (openClassificationsBtn) {
-    openClassificationsBtn.addEventListener("click", async () => {
-      // Se estiver autenticado, mostra ranking do servidor
-      if (ui.nick && ui.password) {
-        await ui.fetchAndRenderServerRanking();
-      } else {
-        // Senão, mostra classificações locais
-        renderClassifications();
-        ui.addMessage("System", "Showing local results. Log in to see Server Ranking.");
-      }
-      
+    openClassificationsBtn.addEventListener("click", () => {
+      renderClassifications();
       classificationsOverlay.classList.remove("hidden");
 
       const popup = classificationsOverlay.querySelector(".classifications-popup");

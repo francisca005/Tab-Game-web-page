@@ -1,25 +1,24 @@
 // js/TabRules.js
+// Motor de regras "puro" para o Tâb (sem UI / servidor)
+
 export class TabRules {
   constructor(rows = 4, cols = 9) {
     this.rows = rows;
     this.cols = cols;
-    this.board = [];
-    this.currentPlayer = "G";
-    this.currentRoll = null;
   }
 
-  setState(board, currentPlayer, currentRoll) {
-    this.board = board;
-    this.currentPlayer = currentPlayer;
-    this.currentRoll = currentRoll;
+  // Permite mudar o tamanho do tabuleiro (4 x cols)
+  setSize(rows, cols) {
+    this.rows = rows;
+    this.cols = cols;
   }
 
-  // Mesmo espelhamento que usas no TabGame
+  // Espelhamento vertical (para tratar o caminho do ponto de vista de Gold)
   mirrorIndex(idx) {
     return this.rows * this.cols - 1 - idx;
   }
 
-  // Caminho em serpente (igual ao TabGame)
+  // Caminho em serpente (mesma lógica do TabGame)
   getBoardPath() {
     const path = [];
     for (let r = 0; r < this.rows; r++) {
@@ -36,10 +35,28 @@ export class TabRules {
     return path;
   }
 
-  // Um passo no caminho + bifurcação 3ª→4ª fila para a 2ª
+  // Bifurcação: 3ª → 4ª fila com alternativa para 2ª (espelho)
+  getSpecialMoves(curIdx, nextIdx) {
+    const specials = [];
+    const rCur = Math.floor(curIdx / this.cols);
+    const rNxt = Math.floor(nextIdx / this.cols);
+    const cCur = curIdx % this.cols;
+
+    // Apenas a bifurcação correta: 3ª - 4ª fila, alternativa para 2ª (espelho)
+    if (rCur === 2 && rNxt === 3) {
+      const rr = 1; // 2ª fila (0-based)
+      const cc = cCur; // mesma coluna (espelho)
+      specials.push(rr * this.cols + cc);
+    }
+
+    return specials;
+  }
+
+  // Próximas posições possíveis num passo
   computeNextPositions(idx) {
     const path = this.getBoardPath();
 
+    // índice de tabuleiro -> posição no path
     const idxToPathPos = new Map();
     for (let i = 0; i < path.length; i++) {
       idxToPathPos.set(path[i], i);
@@ -51,26 +68,25 @@ export class TabRules {
     const result = [];
 
     if (p + 1 < path.length) {
-      const curIdx = path[p];
-      const nextIdx = path[p + 1];
-      result.push(nextIdx);
-
-      // Bifurcação: de row 2 para row 3 pode saltar para row 1 (mesma coluna)
-      const rCur = Math.floor(curIdx / this.cols);
-      const rNext = Math.floor(nextIdx / this.cols);
-      const cCur = curIdx % this.cols;
-
-      if (rCur === 2 && rNext === 3) {
-        const rr = 1;           // 2ª fila (0-based)
-        const cc = cCur;        // mesma coluna
-        result.push(rr * this.cols + cc);
+      // Passo normal + bifurcação (se existir)
+      const cur = path[p];
+      const nxt = path[p + 1];
+      result.push(nxt, ...this.getSpecialMoves(cur, nxt));
+    } else {
+      // Última casa do path (fim da 4ª fila) → pode "descer" para a 3ª fila
+      const cur = path[p];
+      const rCur = Math.floor(cur / this.cols);
+      if (rCur === 3) { // 4ª fila (0-based)
+        const cCur = cur % this.cols;
+        const aboveIdx = 2 * this.cols + cCur; // (r=2, mesma coluna)
+        result.push(aboveIdx);
       }
     }
 
-    return result;
+    return [...new Set(result)];
   }
 
-  // Avançar 'steps' passos, considerando bifurcações
+  // Avançar 'steps' passos a partir de startIdx, considerando bifurcações
   advanceVariants(startIdx, steps) {
     let frontier = [startIdx];
     for (let i = 0; i < steps; i++) {
@@ -83,63 +99,72 @@ export class TabRules {
     return frontier;
   }
 
-  // Destinos válidos para a peça na casa idx
-  validTargetsFrom(idx) {
-    const roll = this.currentRoll;
-    if (!roll || roll <= 0) return [];
-    if (!this.board) return [];
+  /**
+   * Regra do "primeiro movimento só com 1".
+   *
+   * board: array de células -> { player: "G"|"B" } ou null
+   * player: "G" ou "B"
+   * roll: valor atual dos paus
+   * idx: índice da célula onde está a peça
+   */
+  canMovePiece(board, player, roll, idx) {
+    if (!roll || roll <= 0) return false;
+    const piece = board[idx];
+    if (!piece || piece.player !== player) return false;
 
-    const board = this.board;
-    const player = this.currentPlayer;
+    const row = Math.floor(idx / this.cols);
+    const playerStartRow = player === "G" ? 0 : this.rows - 1;
+    const isInitial = row === playerStartRow; // nunca saiu da linha inicial
+
+    // Peça inicial só mexe com 1, as restantes mexem com qualquer valor
+    return roll === 1 || !isInitial;
+  }
+
+  /**
+   * Destinos válidos a partir de idx, dado o roll.
+   * NÃO usa histórico (wasOnLastRow), porque no modo online não o temos.
+   * Regras aplicadas:
+   *  - movimento em serpente + bifurcação
+   *  - não pode cair em casa ocupada pela mesma cor
+   *  - nunca voltar à fila inicial depois de a deixar
+   *  - só pode entrar na fila final quando a fila inicial estiver vazia
+   */
+  validTargetsFrom(board, player, roll, idx) {
+    if (!roll || roll <= 0) return [];
+
     const mirror = this.mirrorIndex.bind(this);
 
-    // Trabalhamos sempre no "espaço Gold"
+    // Converter para o espaço Gold se for Black
     let start = idx;
     if (player === "B") start = mirror(start);
 
+    // Avança exatamente 'roll' passos no caminho
     const destsGold = this.advanceVariants(start, roll);
-    const dests = player === "B" ? destsGold.map(mirror) : destsGold;
 
-    const piece = board[idx];
-    const rowFrom = Math.floor(idx / this.cols);
+    // Voltar ao espaço real se for Black
+    const dests = player === "B" ? destsGold.map(mirror) : destsGold;
 
     const playerStartRow = player === "G" ? 0 : this.rows - 1;
     const playerFinalRow = player === "G" ? this.rows - 1 : 0;
+    const rowFrom = Math.floor(idx / this.cols);
 
     return dests.filter((i) => {
-      if (i < 0 || i >= board.length) return false;
-
-      const targetPiece = board[i];
+      const p = board[i];
       const rowTo = Math.floor(i / this.cols);
 
-      // (1) Não pode cair em cima de peça da mesma cor
-      if (targetPiece && targetPiece.player === player) return false;
+      // (1) Não pode cair em casa ocupada pela mesma cor
+      if (p && p.player === player) return false;
 
-      // (2) Opcional – não voltar à fila final depois de sair dela.
-      //    Aqui esta regra só funciona se board[i].wasOnLastRow estiver cheio.
-      if (
-        piece &&
-        piece.wasOnLastRow &&
-        rowFrom !== playerFinalRow &&
-        rowTo === playerFinalRow
-      ) {
-        return false;
-      }
-
-      // (3) NÃO pode voltar à fila inicial depois de a deixar
+      // (2) Nunca voltar à fila inicial depois de a deixar
       if (rowTo === playerStartRow && rowFrom !== playerStartRow) {
         return false;
       }
 
-      // (4) Só pode ENTRAR na fila FINAL se a fila INICIAL estiver vazia
+      // (3) Só pode ENTRAR na fila FINAL se a fila INICIAL estiver vazia
       if (rowTo === playerFinalRow) {
-        const startSlice = board.slice(
-          playerStartRow * this.cols,
-          (playerStartRow + 1) * this.cols
-        );
-        const hasStartPieces = startSlice.some(
-          (cell) => cell && cell.player === player
-        );
+        const hasStartPieces = board
+          .slice(playerStartRow * this.cols, (playerStartRow + 1) * this.cols)
+          .some((cell) => cell && cell.player === player);
         if (hasStartPieces) return false;
       }
 

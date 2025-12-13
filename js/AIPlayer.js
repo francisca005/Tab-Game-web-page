@@ -3,7 +3,7 @@ export class AIPlayer {
 
   // Construtor 
   constructor(level, game) {
-    this.level = level.toLowerCase(); // "easy" | "medium" | "hard" | "adaptive"
+    this.level = level.toLowerCase(); // "easy" | "medium" | "hard"
     this.game = game; // instância de TabGame
   }
 
@@ -39,14 +39,12 @@ export class AIPlayer {
       }, 900);
     }
   }
-
   // Escolher jogada conforme nível de dificuldade
   chooseMove(validMoves) {
     switch (this.level) {
       case "easy":   return this.randomMove(validMoves);
       case "medium": return this.mediumHeuristic(validMoves);
       case "hard":   return this.hardHeuristic(validMoves);
-      case "adaptive": return this.adaptiveMove(validMoves);
       default:       return this.randomMove(validMoves);
     }
   }
@@ -136,36 +134,6 @@ export class AIPlayer {
     return best;
   }
 
-    // Adaptive — alterna entre easy/medium/hard conforme o estado do jogo
-    adaptiveMove(moves) {
-      const totalGold = this.game.board.filter(p => p?.player === "G").length;
-      const totalBlack = this.game.board.filter(p => p?.player === "B").length;
-      const advantage = totalBlack - totalGold;
-
-      let mode = "easy";
-
-      // Estratégia: quanto maior a vantagem, mais relaxada a IA;
-      // quanto mais atrás, mais séria.
-      if (advantage < -2) mode = "hard";        // Está a perder → joga a sério
-      else if (advantage <= 1) mode = "medium"; // Jogo equilibrado
-      else mode = "easy";                       // Está a ganhar → arrisca menos
-
-      // Pequena aleatoriedade: 20% de chance de escolher outro modo
-      if (Math.random() < 0.2) {
-        const rand = ["easy", "medium", "hard"];
-        mode = rand[Math.floor(Math.random() * 3)];
-      }
-
-      this.game.ui.addMessage("System", `AI switched to ${mode.toUpperCase()} mode.`);
-
-      switch (mode) {
-        case "easy":   return this.randomMove(moves);
-        case "medium": return this.mediumHeuristic(moves);
-        case "hard":   return this.hardHeuristic(moves);
-        default:       return this.mediumHeuristic(moves);
-      }
-    }
-
   // Simulação de jogada
   simulateMove(move) {
     const copy = JSON.parse(JSON.stringify(this.game.board));
@@ -211,6 +179,4 @@ export class AIPlayer {
     // Pequena aleatoriedade para desempates
     return score + Math.random() * 0.05; 
   }
-
 }
-
