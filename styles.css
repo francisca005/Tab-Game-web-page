@@ -226,16 +226,6 @@ select {
   cursor: pointer;
 }
 
-.throw-btn:disabled {
-  opacity: 0.5;              /* aparência opaca */
-  background: #bba98c;       /* tom mais claro do castanho */
-  color: #eee;               /* texto mais claro */
-  cursor: not-allowed;       /* ícone de cursor bloqueado */
-  transform: none;           /* remove efeito hover */
-  box-shadow: none;          /* sem sombra ativa */
-}
-
-
 .throw-btn:hover {
   background: var(--accent);
   color: var(--dark);
@@ -356,31 +346,6 @@ select {
   background: var(--accent);
   cursor: pointer;
 }
-
-/* Virar o tabuleiro para que o Gold fique visualmente em baixo */
-.board {
-  transform: rotate(180deg);
-  transform-origin: center;
-}
-
-/* Contrarrotacionar as peças para ficarem direitas */
-.cell .chip {
-  transform: rotate(180deg);
-}
-
-/* === Ajuste de sombras após rotação do tabuleiro === */
-
-/* Corrige direção da sombra das células (a luz vem agora de cima real) */
-.board .cell {
-  box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.1) inset,
-              0 -2px 4px rgba(0, 0, 0, 0.05);
-}
-
-/* Corrige também a sombra das peças */
-.board .chip {
-  box-shadow: 0 -3px 6px rgba(0, 0, 0, 0.3);
-}
-
 
 /* --- Messages --- */
 .messages {
