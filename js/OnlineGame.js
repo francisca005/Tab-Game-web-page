@@ -115,18 +115,43 @@ export class OnlineGame {
   async notifyByCoords(r, c) {
     if (!this.gameId) return;
 
+    // Só podes jogar na tua vez
     if (this.turn && this.turn !== this.nick) {
-      this.ui.addMessage("System", "Not your turn." );
+      this.ui.addMessage("System", "Not your turn.");
+      return;
+    }
+
+    // Se ainda não lançou o dado, não faz sentido selecionar peça
+    if (this.dice === null) {
+      this.ui.addMessage("System", "Roll the sticks first!");
       return;
     }
 
     const idx = this.uiToServerIndex(r, c);
+
+    // Se estás a escolher destino/captura, só deixa clicar em:
+    // - origem (para cancelar)
+    // - destinos destacados pelo servidor (selected)
+    if (this.step === "to" || this.step === "take") {
+      const origin = (typeof this.lastCell === "number") ? this.lastCell : null;
+      const targets = Array.isArray(this.selected) ? this.selected : [];
+
+      const isOrigin = (origin !== null && idx === origin);
+      const isTarget = targets.includes(idx);
+
+      if (!isOrigin && !isTarget) {
+        this.ui.addMessage("System", "Choose one of the highlighted squares (or click the piece again to cancel).");
+        return;
+      }
+    }
+
     try {
       await this.api.notify(this.nick, this.password, this.gameId, idx);
     } catch (e) {
       this.ui.addMessage("System", `Invalid move: ${e.message}`);
     }
   }
+
 
   // --------- UPDATE HANDLER ---------
 
@@ -183,7 +208,8 @@ export class OnlineGame {
         if (!p) continue;
 
         const { r, c } = this.serverIndexToUI(i);
-        const owner = this.isInitialColor(p) ? "G" : "B";
+        const owner = this.isInitialColor(p) ? "B" : "G";
+
         const piece = new Piece(owner);
 
         // map server state to visuals
@@ -196,7 +222,7 @@ export class OnlineGame {
     }
 
     // Update current player highlight
-    const currentPlayer = (this.turn && this.initial) ? (this.turn === this.initial ? "G" : "B") : "G";
+    const currentPlayer = (this.turn && this.initial) ? (this.turn === this.initial ? "B" : "G") : "G";
 
     this.ui.clearHighlights(true);
     this.ui.renderBoard(matrix, currentPlayer, (r, c) => this.notifyByCoords(r, c));
@@ -224,8 +250,8 @@ export class OnlineGame {
     const canPass = myTurn && (this.mustPass === this.nick);
     this.ui.setSkipEnabled(!!canPass, () => this.pass());
 
-    // Highlights from server (selected)
-    if (Array.isArray(this.selected) && this.selected.length > 0) {
+    // Highlights de destinos válidos (só durante a escolha de destino/captura)
+    if ((this.step === "to" || this.step === "take") && Array.isArray(this.selected) && this.selected.length > 0) {
       const targets = this.selected
         .map((idx) => this.serverIndexToUI(idx))
         .map(({ r, c }) => ({ r, c }));
@@ -306,32 +332,31 @@ export class OnlineGame {
     const rB = Math.floor(idx / size);   // linha a partir de baixo: 0..3
     const off = idx % size;              // offset dentro da linha
 
-    // serpente:
-    // linha 0 (de baixo): direita -> esquerda
-    // linha 1: esquerda -> direita
-    // linha 2: direita -> esquerda
-    // linha 3: esquerda -> direita
-    const uiRow = 3 - rB;
-    const uiCol = (rB % 2 === 0) ? (size - 1 - off) : off;
+    // SERPENTE (como tu queres na vista do jogador):
+    // fila de baixo e 3ª fila: esquerda -> direita
+    // 2ª e 4ª fila: direita -> esquerda
+    let r = 3 - rB;
+    let c = (rB % 2 === 0) ? off : (size - 1 - off);
 
-    // se estiveres a rodar para o jogador que NÃO é "initial"
-    if (this.rotateForNonInitial && !this.isInitialPerspective) {
-      return { r: 3 - uiRow, c: (size - 1) - uiCol };
+    // se o tabuleiro estiver rodado para o jogador não-inicial
+    if (this.viewRotated) {
+      r = 3 - r;
+      c = (size - 1) - c;
     }
-    return { r: uiRow, c: uiCol };
+    return { r, c };
   }
 
   uiToServerIndex(r, c) {
     const size = this.size;
 
-    // desfaz rotação (se aplicável)
-    if (this.rotateForNonInitial && !this.isInitialPerspective) {
+    // desfaz rotação (se estava rodado)
+    if (this.viewRotated) {
       r = 3 - r;
       c = (size - 1) - c;
     }
 
-    const rB = 3 - r; // voltar a “linha a partir de baixo”
-    const off = (rB % 2 === 0) ? (size - 1 - c) : c;
+    const rB = 3 - r;
+    const off = (rB % 2 === 0) ? c : (size - 1 - c);
     return rB * size + off;
   }
 
