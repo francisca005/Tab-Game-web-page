@@ -316,6 +316,7 @@ export class OnlineGame {
     const cols = this.size;
     const matrix = Array.from({ length: this.rows }, () => Array(cols).fill(null));
 
+    // --- build matrix from server pieces ---
     if (Array.isArray(this.pieces)) {
       for (let i = 0; i < this.pieces.length; i++) {
         const p = this.pieces[i];
@@ -325,16 +326,38 @@ export class OnlineGame {
         const owner = this.isInitialColor(p) ? "B" : "G";
 
         const piece = new Piece(owner);
-        const reached =
-          (typeof p.reachedLastRow === "boolean" ? p.reachedLastRow : null) ??
-          (typeof p.wasOnLastRow === "boolean" ? p.wasOnLastRow : null) ??
-          false;
+
+        // ✅ reachedLastRow do servidor (às vezes falha em casos raros)
+        const reachedFromServer = (p.reachedLastRow === true);
+
+        // ✅ fallback robusto: inferir "final" pela posição no array do servidor
+        // rB = linha no referencial do servidor, a partir de baixo: 0..3
+        const rB = Math.floor(i / cols);
+
+        // peça pertence ao jogador initial?
+        const belongsToInitial = this.isInitialColor(p);
+
+        // se já se moveu e está na "linha do adversário", então é final
+        // - initial chega à linha 3
+        // - não-initial chega à linha 0
+        const inferredReached =
+          !!p.inMotion && (
+            (belongsToInitial && rB === 3) ||
+            (!belongsToInitial && rB === 0)
+          );
+
+        const reached = reachedFromServer || inferredReached;
 
         if (reached) piece.type = "final";
         else if (p.inMotion) piece.type = "moved";
         else piece.type = "initial";
-        
+
         matrix[r][c] = piece;
+
+        // (opcional) debug do caso raro:
+        // if (inferredReached && !reachedFromServer) {
+        //   console.log("[inferred final]", { i, rB, belongsToInitial, p });
+        // }
       }
     }
 
@@ -342,12 +365,15 @@ export class OnlineGame {
       ? (this.turn === this.initial ? "B" : "G")
       : "G";
 
+    // --- draw board ---
     this.ui.clearHighlights(true);
     this.ui.renderBoard(matrix, currentPlayer, (r, c) => this.notifyByCoords(r, c));
 
+    // --- counts ---
     const counts = this.countPiecesFromMatrix(matrix);
     this.ui.updateCounts(counts.g, counts.b);
 
+    // --- dice UI ---
     if (this.dice && typeof this.dice.value === "number") {
       const val = this.dice.value;
       const symbol = this.symbolForDice(val);
@@ -361,8 +387,8 @@ export class OnlineGame {
     const isChoosingDestination = (this.step === "to" || this.step === "take");
     const mustSkip = (this.mustPass === this.nick || this.mustPass === true);
 
-    // se o jogo acabou -> tudo desligado
-    if (this.winner !== null) {
+    // se o jogo acabou -> botões desligados (mas o tabuleiro continua visível)
+    if (this.winner !== null && this.winner !== undefined) {
       this.ui.setRollEnabled(false);
       this.ui.setSkipEnabled(false);
       return;
@@ -372,7 +398,7 @@ export class OnlineGame {
     const noPieceMovedYet = !!(
       Array.isArray(this.pieces) &&
       myServerColor &&
-      !this.pieces.some(p => p && p.color === myServerColor && p.inMotion)
+      !this.pieces.some(pp => pp && pp.color === myServerColor && pp.inMotion)
     );
 
     const canImmediateRerollStart =
@@ -391,13 +417,17 @@ export class OnlineGame {
     const canRoll =
       myTurn &&
       !isChoosingDestination &&
-      !mustSkip &&
-      (this.dice === null || canRerollNow);
+      (this.dice === null || canRerollNow) &&
+      (
+        !mustSkip || canRerollNow   // ✅ se mustSkip mas posso reroll, deixa lançar
+      );
 
     this.ui.setRollEnabled(!!canRoll);
 
-    const canPass = myTurn && mustSkip && !isChoosingDestination;
+    // Skip só quando o servidor obriga E não podes relançar
+    const canPass = myTurn && mustSkip && !isChoosingDestination && !canRerollNow;
     this.ui.setSkipEnabled(!!canPass, () => this.pass());
+
 
     // Highlights
     if ((this.step === "to" || this.step === "take") && Array.isArray(this.selected) && this.selected.length > 0) {
@@ -423,14 +453,17 @@ export class OnlineGame {
       this.statusOnce("Wait for opponents play");
       return;
     }
-    if (mustSkip) {
-      this.statusOnce("No available moves. You must skip turn.");
-      return;
-    }
+    // ✅ se podes relançar, a mensagem correta é lançar novamente (não skip)
     if (this.dice === null || canRerollNow) {
       this.statusOnce("Your turn. Throw the sticks");
       return;
     }
+
+    if (mustSkip) {
+      this.statusOnce("No available moves. You must skip turn.");
+      return;
+    }
+
     this.statusOnce(`Move a piece ${this.dice.value} spaces`);
   }
 
