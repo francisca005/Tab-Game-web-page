@@ -247,5 +247,69 @@ document.addEventListener("DOMContentLoaded", () => {
       classificationsOverlay.classList.add("hidden");
     });
   }
+  
+  // -------- Ranking ONLINE (Player vs Player) --------
+  const openRankingBtn = document.getElementById("openRankingBtn");
+  const rankingOverlay = document.getElementById("rankingOverlay");
+  const closeRankingBtn = document.querySelector(".close-ranking");
+  const rankingTableContainer = document.getElementById("rankingTableContainer");
+
+  function renderRankingTable(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      rankingTableContainer.innerHTML = "<p>No ranking data yet.</p>";
+      return;
+    }
+
+    let tableHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Nick</th>
+            <th>Victories</th>
+            <th>Games</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    rows.forEach((r) => {
+      tableHTML += `
+        <tr>
+          <td>${r.nick}</td>
+          <td>${r.victories}</td>
+          <td>${r.games}</td>
+        </tr>
+      `;
+    });
+
+    tableHTML += "</tbody></table>";
+    rankingTableContainer.innerHTML = tableHTML;
+  }
+
+  if (openRankingBtn) {
+    openRankingBtn.addEventListener("click", async () => {
+      try {
+        const size = Number(document.getElementById("boardSize")?.value || 9);
+
+        // ranking não exige login — só group + size
+        const res = await onlineGame.api.ranking(onlineGame.group, size);
+
+        if (res?.error) rankingTableContainer.innerHTML = `<p>${res.error}</p>`;
+        else renderRankingTable(res?.ranking || []);
+
+        rankingOverlay.classList.remove("hidden");
+      } catch (e) {
+        rankingTableContainer.innerHTML = `<p>Error: ${e.message || e}</p>`;
+        rankingOverlay.classList.remove("hidden");
+      }
+    });
+  }
+
+  if (closeRankingBtn) {
+    closeRankingBtn.addEventListener("click", () => {
+      rankingOverlay.classList.add("hidden");
+    });
+  }
+
 
 });

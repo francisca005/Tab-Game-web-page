@@ -411,7 +411,7 @@ export class OnlineGame {
       !!(this.dice && this.dice.keepPlaying && (
         canImmediateRerollStart ||
         mustSkip ||
-        this.dice.value === 6
+        this.dice.value === 6 || this.dice.value === 4
       ));
 
     const canRoll =
