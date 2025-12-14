@@ -161,7 +161,7 @@
             <h2 id="ruleTitle" aria-live="polite"></h2>
             <div id="ruleText"></div>
             <video id="ruleVideoModal" controls>
-              <source src="about:blank" type="video/mp4">
+              <source src="" type="video/mp4">
               Your browser does not support the video tag.
             </video>
           </div>
@@ -215,18 +215,30 @@
         <!-- Classification Section-->
         <div class="classifications card">
           <h2>Classifications</h2>
-          <p>View all recorded games and results.</p>
-          <button class="cta-btn" id="openClassificationsBtn">See Classifications</button>
+          <p>View classifications for each mode.</p>
+
+          <button class="cta-btn" id="openRankingBtn">See Classifications (Player vs Player)</button>
+          <button class="cta-btn" id="openClassificationsBtn">See Classifications (Player vs Computer)</button>
         </div>
 
-        <!-- Popup for all classifications -->
+        <!-- Popup: ONLINE ranking (server) -->
+        <div id="rankingOverlay" class="classifications-overlay hidden">
+          <div class="classifications-popup card">
+            <button class="close-ranking">← Back to Menu</button>
+            <h2>Online Ranking</h2>
+            <div id="rankingTableContainer"></div>
+          </div>
+        </div>
+
+        <!-- Popup: LOCAL classifications (WebStorage) -->
         <div id="classificationsOverlay" class="classifications-overlay hidden">
           <div class="classifications-popup card">
             <button class="close-classifications">← Back to Menu</button>
-            <h2>Classifications</h2>
+            <h2>Local Classifications</h2>
             <div id="classificationsTableContainer"></div>
           </div>
         </div>
+
 
       </div>
     </section>

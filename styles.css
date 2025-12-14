@@ -231,6 +231,23 @@ select {
   color: var(--dark);
 }
 
+/* Throw button disabled look (like Skip Turn) */
+.throw-btn:disabled,
+.throw-btn:not(.enabled) {
+  background: #ddd2b8;
+  color: #6b614c;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+/* prevent hover style when disabled */
+.throw-btn:disabled:hover,
+.throw-btn:not(.enabled):hover {
+  background: #ddd2b8;
+  color: #6b614c;
+}
+
+
 @keyframes spinSticks {
   0% {
     transform: rotate(0deg) scale(1);
