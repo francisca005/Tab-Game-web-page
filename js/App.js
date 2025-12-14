@@ -5,18 +5,15 @@ import { OnlineGame } from "./OnlineGame.js";
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  // Inicialização principal
   const ui = new UIManager();
   let localGame = new TabGame(ui);
   const onlineGame = new OnlineGame(ui, {
     serverUrl: "http://twserver.alunos.dcc.fc.up.pt:8008",
-    group: 4567, // TODO: coloca aqui o teu número de grupo
+    group: 4567,
   });
 
   let activeMode = "local"; // "local" | "online"
 
-
-  // Configurações e eventos do jogo 
   ui.onThrow = () => {
     if (activeMode === "online") return onlineGame.roll();
     return localGame.rollSticks();
@@ -26,12 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (activeMode === "online") {
       await onlineGame.leave();
       ui.addMessage("System", "Online: left the match.");
+      activeMode = "local";
       return;
     }
     localGame.quitGame();
   };
 
-  // Auth (usado para modo online)
   ui.onLogin = async (nick, pass) => {
     await onlineGame.login(nick, pass);
     sessionStorage.setItem("tab_nick", nick);
@@ -40,7 +37,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   ui.onLogout = async () => {
-    // se estiver em jogo online, sair
     if (activeMode === "online") {
       await onlineGame.leave();
       activeMode = "local";
@@ -50,74 +46,71 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.addMessage("System", "Sessão terminada.");
   };
 
-  // Restore session (se existir)
   const savedNick = sessionStorage.getItem("tab_nick");
   const savedPass = sessionStorage.getItem("tab_pass");
   if (savedNick && savedPass) {
     onlineGame.login(savedNick, savedPass)
       .then(() => ui.setAuthUI(true, savedNick))
-      .catch(() => {/* ignore */});
+      .catch(() => {});
   }
 
+  // ✅ agora é async para conseguires "await leave" antes de um novo jogo online
+  ui.onGoToGame = async ({ cols, mode, first, aiLevel }) => {
+    ui.resetGameUI();
 
-  ui.onGoToGame = ({ cols, mode, first, aiLevel }) => {
     if (mode === "pvp_online") {
+      // se já estavas online, sai explicitamente do jogo anterior
+      if (activeMode === "online") {
+        await onlineGame.leave();
+      }
+
       activeMode = "online";
       ui.clearHighlights(true);
       ui.setRollEnabled(false);
       ui.setSkipEnabled(false);
 
-      // tabuleiro vazio enquanto espera
       const empty = Array.from({ length: 4 }, () => Array(cols).fill(null));
       ui.renderBoard(empty, "G", (r, c) => onlineGame.notifyByCoords(r, c));
       ui.updateCounts(0, 0);
-      ui.addMessage("System", "Online: a procurar adversário..." );
+      ui.addMessage("System", "Online: a procurar adversário...");
 
       onlineGame.start(cols).catch((e) => {
         ui.addMessage("System", `Online error: ${e.message || e}`);
         activeMode = "local";
       });
+
       document.querySelector(".bottom")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
 
-    // Se estava online, sair do jogo / fechar SSE
+    // se mudaste para local e estavas online, sai do jogo
     if (activeMode === "online") {
-      onlineGame.leave().catch(() => {});
+      await onlineGame.leave();
     }
 
     activeMode = "local";
     localGame = new TabGame(ui);
     localGame.init(cols, first);
-    
-    // Define texto do modo 
+
     let modeText = "";
     switch (mode) {
       case "pvp_local":
         modeText = "Player vs Player (same computer)";
-        break;
-      case "pvp_online":
-        modeText = "Player vs Player (requires second player login)";
         break;
       case "pvc":
         modeText = `Player vs Computer (${aiLevel})`;
         break;
     }
 
-    // Mensagem de início de jogo
     ui.addMessage("System", `New game: ${modeText}, first to play: ${first}.`);
-
-    // scroll até ao tabuleiro
     document.querySelector(".bottom")?.scrollIntoView({ behavior: "smooth" });
   };
 
   ui.onConfigChange = () => ui.updateAIVisibility();
 
-  // Inicializa listeners e visibilidade do menu de AI
   ui.initListeners();
-  ui.updateAIVisibility(); 
+  ui.updateAIVisibility();
 
-  // Inicialização local
   localGame.init(9, "Gold");
 
   // Modal de regras (PUSH-UP)
@@ -254,6 +247,5 @@ document.addEventListener("DOMContentLoaded", () => {
       classificationsOverlay.classList.add("hidden");
     });
   }
- 
 
 });

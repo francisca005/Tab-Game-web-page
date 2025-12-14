@@ -22,6 +22,7 @@ export class UIManager {
     this.sizeInput = document.getElementById("boardSize");
     this.modeSelect = document.getElementById("modeSelect");
     this.firstSelect = document.getElementById("firstSelect");
+    this.firstSelectLabel = this.firstSelect?.closest("label");
     this.aiLevelSelect = document.getElementById("aiLevel");
     this.aiLevelGroup = document.getElementById("aiLevelGroup");
 
@@ -274,10 +275,18 @@ export class UIManager {
   }
 
   // Visibilidade do nível de IA
+  // Visibilidade do nível de IA
   updateAIVisibility() {
     const isPVC = this.modeSelect.value === "pvc";
+
+    // AI options only in PvC
     this.aiLevelGroup.classList.toggle("hidden", !isPVC);
     this.aiLevelSelect.disabled = !isPVC;
+
+    // In online PvP, the first player is always Black (server decides),
+    // so hide/disable the First-to-play option.
+    if (this.firstSelectLabel) this.firstSelectLabel.classList.toggle("hidden", !isPVC);
+    if (this.firstSelect) this.firstSelect.disabled = !isPVC;
   }
 
   // Animação dos paus 
@@ -310,6 +319,22 @@ export class UIManager {
     rollBtn.disabled = !can;
     rollBtn.classList.toggle("enabled", can);
   }
+
+  resetGameUI() {
+    this.clearHighlights(true);
+    this.setRollEnabled(false);
+    this.setSkipEnabled(false);
+
+    // limpa resultado do dado (texto + visibilidade)
+    if (this.resultEl) {
+      this.resultEl.classList.remove("show");
+      this.resultEl.textContent = "";
+    }
+    if (this.sticksEl) {
+      this.sticksEl.textContent = "";
+    }
+  }
+
 
   refreshRollButton(game) {
     const can =
