@@ -268,6 +268,14 @@ export class TabGame {
     }
 
     const targetPiece = this.board[toIdx];
+    
+
+    // se havia peça no destino, é captura -> flash + shake no destino
+    if (targetPiece) {
+      // se estiveres a usar a animação de movimento (~380ms), fica melhor disparar depois
+      setTimeout(() => this.ui.fxCapture?.(toIdx), 380);
+    }
+
     this.board[toIdx] = movingPiece;
     this.board[fromIdx] = null;
 
@@ -383,7 +391,6 @@ export class TabGame {
     if (window.recordGameResult) {
       window.recordGameResult(winner, piecesLeft, "—");
     }
-    this.ui.updateLeaderboard(winner, piecesLeft, "—");
 
     this.ui.setRollEnabled(false);
     this.ui.setSkipEnabled(false);

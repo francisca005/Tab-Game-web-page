@@ -51,6 +51,8 @@ export class OnlineGame {
     // evita repetir animação quando o SSE manda updates com o mesmo dice
     this._lastDiceAnimKey = null;
 
+    this._pendingCaptureUiIdx = null;
+
   }
 
   // --------- AUTH ---------
@@ -269,7 +271,34 @@ export class OnlineGame {
     }
 
     if ("mustPass" in data) this.mustPass = data.mustPass;
-    if (Array.isArray(data.pieces)) this.pieces = data.pieces;
+    // captura detection (antes/depois de aplicar pieces)
+    const prevPieces = Array.isArray(this.pieces) ? this.pieces : null;
+
+    if (Array.isArray(data.pieces)) {
+      this.pieces = data.pieces;
+
+      if (prevPieces && prevPieces.length === this.pieces.length) {
+        let captureServerIdx = null;
+
+        for (let i = 0; i < this.pieces.length; i++) {
+          const a = prevPieces[i];
+          const b = this.pieces[i];
+          if (!a || !b) continue;
+
+          // se a cor mudou no mesmo quadrado => alguém foi capturado ali
+          if (String(a.color) !== String(b.color)) {
+            captureServerIdx = i;
+            break;
+          }
+        }
+
+        if (captureServerIdx !== null) {
+          const { r, c } = this.serverIndexToUI(captureServerIdx);
+          this._pendingCaptureUiIdx = r * this.size + c;
+        }
+      }
+    }
+
     if (Array.isArray(data.selected)) this.selected = data.selected;
     if ("cell" in data) this.lastCell = data.cell;
     if ("players" in data && data.players) this.players = data.players;
@@ -288,6 +317,12 @@ export class OnlineGame {
     }
 
     this.render();
+
+    if (this._pendingCaptureUiIdx !== null) {
+      this.ui.fxCapture?.(this._pendingCaptureUiIdx);
+      this._pendingCaptureUiIdx = null;
+    }
+
 
     // ✅ se o jogo acabou, trava tudo e fecha stream
     if ("winner" in data) {

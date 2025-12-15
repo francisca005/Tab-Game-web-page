@@ -30,10 +30,6 @@ export class UIManager {
     this.passInput = document.querySelector(".pass-input");
     this.welcomeText = document.querySelector(".welcome-text");
 
-    // Leaderboard
-    this.leaderboard = [];
-    this.tableBody = document.querySelector(".classifications tbody");
-
     // Callbacks configuráveis (definidas pelo jogo principal)
     this.onThrow = null;
     this.onQuit = null;
@@ -65,6 +61,11 @@ export class UIManager {
     // Timers da animação dos paus
     this._sticksAnimTimer = null;
     this._sticksOverlayHideTimer = null;
+
+    // FX: captura (flash + shake)
+    this._capRaf = null;
+    this._capAnim = null;
+
   }
 
   // Inicialização e listeners
@@ -99,7 +100,6 @@ export class UIManager {
     });
 
     this.initLogin();
-    this.loadLeaderboard();
 
     // desenha sticks iniciais (agora já existe o método)
     this._drawSticksBoth([true, true, true, true], { jitter: 0, rotAmp: 0, idle: true });
@@ -258,42 +258,6 @@ export class UIManager {
     } else {
       this.skipBtn.onclick = null;
     }
-  }
-
-  // Leaderboard (localStorage)
-  updateLeaderboard(winner, piecesLeft) {
-    const record = {
-      winner,
-      piecesLeft,
-      date: new Date().toLocaleString(),
-    };
-
-    this.leaderboard.push(record);
-    this.leaderboard.sort((a, b) => b.piecesLeft - a.piecesLeft);
-    localStorage.setItem("tab_leaderboard", JSON.stringify(this.leaderboard));
-
-    this.renderLeaderboard();
-  }
-
-  loadLeaderboard() {
-    const saved = localStorage.getItem("tab_leaderboard");
-    if (saved) this.leaderboard = JSON.parse(saved);
-    this.renderLeaderboard();
-  }
-
-  renderLeaderboard() {
-    if (!this.tableBody) return;
-    this.tableBody.innerHTML = "";
-
-    this.leaderboard.forEach((rec, idx) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${rec.date}</td>
-        <td>${rec.winner}${idx === 0 ? " 🏆" : ""}</td>
-        <td>${rec.piecesLeft}</td>
-      `;
-      this.tableBody.appendChild(tr);
-    });
   }
 
   // Visibilidade do nível de IA
@@ -612,6 +576,85 @@ export class UIManager {
 
     this._fxAnimRaf = requestAnimationFrame(frame);
   }
+
+  // --- FX: flash + shake na captura ---
+  fxCapture(boardIdx, opts = {}) {
+    if (!this.boardFxCanvas || !this.boardFxCtx || !this.boardEl) return;
+    if (typeof boardIdx !== "number") return;
+
+    // garante canvas com tamanho certo
+    this._resizeBoardFxCanvas?.();
+
+    const cols = this.cols || 9;
+    const r = Math.floor(boardIdx / cols);
+    const c = boardIdx % cols;
+
+    const P = this._cellCenterPx(r, c);
+    if (!P) return;
+
+    // 1) SHAKE discreto (sem CSS, via Web Animations API)
+    const shakeEl = this.boardWrap || this.boardEl;
+    if (shakeEl?.animate) {
+      try { this._capAnim?.cancel?.(); } catch {}
+      this._capAnim = shakeEl.animate(
+        [
+          { transform: "translate(0,0)" },
+          { transform: "translate(-3px,0)" },
+          { transform: "translate(3px,0)" },
+          { transform: "translate(-2px,0)" },
+          { transform: "translate(2px,0)" },
+          { transform: "translate(0,0)" },
+        ],
+        { duration: 140, easing: "ease-out" }
+      );
+    }
+
+    // 2) FLASH no destino (curto e suave)
+    const refEl = this.boardWrap || this.boardEl;
+    const rect = refEl.getBoundingClientRect();
+    const ctx = this.boardFxCtx;
+
+    const dur = typeof opts.duration === "number" ? opts.duration : 220;
+    const maxR = typeof opts.radius === "number" ? opts.radius : 28;
+
+    if (this._capRaf) {
+      cancelAnimationFrame(this._capRaf);
+      this._capRaf = null;
+    }
+
+    const t0 = performance.now();
+    const frame = (now) => {
+      const raw = (now - t0) / dur;
+      const t = Math.max(0, Math.min(1, raw));
+
+      // fade rápido no fim
+      const a = 0.55 * (1 - t);
+
+      // limpa só o flash (nota: se o ghost move estiver ativo, ele vai limpar também)
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      // gradiente radial
+      const g = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, maxR);
+      g.addColorStop(0, `rgba(255, 245, 160, ${a})`);
+      g.addColorStop(0.6, `rgba(255, 210, 80, ${a * 0.65})`);
+      g.addColorStop(1, `rgba(255, 210, 80, 0)`);
+
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(P.x, P.y, maxR, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (t < 1) {
+        this._capRaf = requestAnimationFrame(frame);
+      } else {
+        this._capRaf = null;
+        ctx.clearRect(0, 0, rect.width, rect.height);
+      }
+    };
+
+    this._capRaf = requestAnimationFrame(frame);
+  }
+
 
 
   // som
