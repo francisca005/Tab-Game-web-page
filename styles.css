@@ -626,7 +626,6 @@ select {
   height: 36px;
   margin: 6px auto;
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-  animation: dropIn 0.6s ease forwards;
 }
 
 @keyframes dropIn {
@@ -777,5 +776,25 @@ select {
 .sticks-canvas--big {
   width: 640px;
   max-width: 90vw;
+}
+
+/* Canvas overlay em cima do tabuleiro (efeitos/animações) */
+.board-wrap {
+  position: relative;
+  display: inline-block;   /* para o wrap ter exatamente o tamanho da grid */
+}
+
+.board-fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;    /* não bloqueia cliques */
+  z-index: 5;              /* por cima da grid */
+}
+
+.board {
+  position: relative;
+  z-index: 2;
 }
 
