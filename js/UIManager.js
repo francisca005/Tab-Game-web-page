@@ -22,7 +22,7 @@ export class UIManager {
     this.aiLevelSelect = document.getElementById("aiLevel");
     this.aiLevelGroup = document.getElementById("aiLevelGroup");
 
-    // Login visual(não funcional)
+    // Login visual
     this.loginBtn = document.querySelector(".login-btn");
     this.logoutBtn = document.querySelector(".logout-btn");
     this.loginForm = document.querySelector(".login-form");
@@ -51,12 +51,11 @@ export class UIManager {
     this.overlay = document.getElementById("sticks-overlay");
     this.bigResult = this.overlay?.querySelector(".sticks-result") || null;
 
-    // Canvas de efeitos no tabuleiro (movimentos, partículas, etc.)
+    // Canvas de efeitos no tabuleiro 
     this.boardWrap = document.querySelector(".board-wrap");
     this.boardFxCanvas = document.getElementById("boardFxCanvas");
     this.boardFxCtx = this.boardFxCanvas?.getContext?.("2d") || null;
     this._fxAnimRaf = null;
-
 
     // Timers da animação dos paus
     this._sticksAnimTimer = null;
@@ -101,7 +100,7 @@ export class UIManager {
 
     this.initLogin();
 
-    // desenha sticks iniciais (agora já existe o método)
+    // desenha sticks iniciais 
     this._drawSticksBoth([true, true, true, true], { jitter: 0, rotAmp: 0, idle: true });
     window.addEventListener("resize", () => this._resizeBoardFxCanvas?.());
   }
@@ -264,17 +263,16 @@ export class UIManager {
   updateAIVisibility() {
     const isPVC = this.modeSelect?.value === "pvc";
 
-    // AI options only in PvC
+    // Opção AI só visível em PvC
     this.aiLevelGroup?.classList.toggle("hidden", !isPVC);
     if (this.aiLevelSelect) this.aiLevelSelect.disabled = !isPVC;
 
-    // In online PvP, the first player is always Black (server decides),
-    // so hide/disable the First-to-play option.
+    // No modo PvC, não mostra a escolha do primeiro
     if (this.firstSelectLabel) this.firstSelectLabel.classList.toggle("hidden", !isPVC);
     if (this.firstSelect) this.firstSelect.disabled = !isPVC;
   }
 
-  // ---------------- Canvas sticks (frames) ----------------
+  //Canvas sticks (frames)
 
   _stopSticksAnimation() {
     if (this._sticksAnimTimer) {
@@ -336,7 +334,6 @@ export class UIManager {
     const W = canvas.width;
     const H = canvas.height;
 
-    // “piso”
     ctx.globalAlpha = 0.12;
     ctx.fillRect(0, H * 0.72, W, H * 0.08);
     ctx.globalAlpha = 1;
@@ -345,11 +342,10 @@ export class UIManager {
     const padX = W * 0.08;
     const gap = (W - padX * 2) / n;
 
-    // Pau mais "retangular" (fino e comprido)
-    const thickness = Math.max(6, H * 0.10);       // espessura
-    const length = Math.min(H * 0.62, gap * 0.95); // comprimento
-    const yUp = H * 0.36;      // linha para os em pé
-    const yDown = H * 0.58;    // linha para os deitados
+    const thickness = Math.max(6, H * 0.10);       
+    const length = Math.min(H * 0.62, gap * 0.95); 
+    const yUp = H * 0.36;    
+    const yDown = H * 0.58;   
 
     for (let i = 0; i < n; i++) {
       const up = !!stickUps[i];
@@ -409,7 +405,7 @@ export class UIManager {
     this._stopSticksAnimation();
 
     const fps = 30;
-    const totalFrames = 30; // ~1s
+    const totalFrames = 30; 
     let f = 0;
 
     this._sticksAnimTimer = setInterval(() => {
@@ -429,7 +425,7 @@ export class UIManager {
       if (f >= totalFrames) {
         this._stopSticksAnimation();
 
-        // mantém overlay um bocado e depois esconde
+        // mantém overlay por pouco tempo e depois esconde
         this._sticksOverlayHideTimer = setTimeout(() => {
           this.overlay?.classList.add("hidden");
           this._sticksOverlayHideTimer = null;
@@ -438,7 +434,7 @@ export class UIManager {
     }, 1000 / fps);
   }
 
-  // ---------- Board FX Canvas helpers ----------
+  //Board FX Canvas helpers
 
   _resizeBoardFxCanvas() {
     if (!this.boardFxCanvas || !this.boardFxCtx) return;
@@ -563,7 +559,7 @@ export class UIManager {
       const x = A.x + (B.x - A.x) * e;
       const y = A.y + (B.y - A.y) * e - Math.sin(Math.PI * e) * 10;
 
-      // ghost por cima (ligeiramente maior)
+      // ghost por cima 
       this._drawChipFx(ctx, x, y, player, type, 0.85, 1.05);
 
       if (t < 1) {
@@ -577,7 +573,7 @@ export class UIManager {
     this._fxAnimRaf = requestAnimationFrame(frame);
   }
 
-  // --- FX: flash + shake na captura ---
+  //FX: flash + shake na captura
   fxCapture(boardIdx, opts = {}) {
     if (!this.boardFxCanvas || !this.boardFxCtx || !this.boardEl) return;
     if (typeof boardIdx !== "number") return;
@@ -592,7 +588,7 @@ export class UIManager {
     const P = this._cellCenterPx(r, c);
     if (!P) return;
 
-    // 1) SHAKE discreto (sem CSS, via Web Animations API)
+    // 1) SHAKE discreto 
     const shakeEl = this.boardWrap || this.boardEl;
     if (shakeEl?.animate) {
       try { this._capAnim?.cancel?.(); } catch {}
@@ -630,7 +626,7 @@ export class UIManager {
       // fade rápido no fim
       const a = 0.55 * (1 - t);
 
-      // limpa só o flash (nota: se o ghost move estiver ativo, ele vai limpar também)
+      // limpa só o flash 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       // gradiente radial
@@ -654,8 +650,6 @@ export class UIManager {
 
     this._capRaf = requestAnimationFrame(frame);
   }
-
-
 
   // som
   playSound(url, vol = 0.3) {

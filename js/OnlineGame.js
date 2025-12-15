@@ -22,26 +22,25 @@ export class OnlineGame {
     this.gameId = null;
     this.eventSource = null;
 
-    // last known server state
+    // último estado do jogo
     this.size = 9;
-    this.players = null;   // {nick: "Blue"|"Red"}
-    this.initial = null;   // nick
-    this.turn = null;      // nick
-    this.step = null;      // "from"|"to"|"take"
-    this.dice = null;      // null or {value, keepPlaying, stickValues}
-    this.mustPass = null;  // null | nick | true
-    this.pieces = null;    // array len 4*size
-    this.selected = null;  // array of indices
-    this.lastCell = null;  // number index or object
-    this.winner = null;    // string | null | (never undefined)
+    this.players = null;   
+    this.initial = null;   
+    this.turn = null;      
+    this.step = null;     
+    this.dice = null;      
+    this.mustPass = null;  
+    this.pieces = null;    
+    this.selected = null; 
+    this.lastCell = null;  
+    this.winner = null;    
 
-    // View preference: rotate board for the non-initial player.
+    // Rodar vista para o segundo jogador
     this.viewRotated = false;
 
-    // prevent chat spam
     this._lastStatusMsg = "";
 
-    // roll gating (kept, but not relied on for server rules)
+    // estado extra para roll
     this._awaitingMove = false;
     this._lastRollKeepPlaying = false;
     this._extraRollReady = false;
@@ -55,7 +54,7 @@ export class OnlineGame {
 
   }
 
-  // --------- AUTH ---------
+  //autenticação
 
   async login(nick, password) {
     await this.api.register(String(nick), String(password));
@@ -67,7 +66,7 @@ export class OnlineGame {
     return !!(this.nick && this.password);
   }
 
-  // --------- GAME LIFECYCLE ---------
+  //estado do jogo
 
   resetStateForNewGame(size) {
     this.closeStream();
@@ -97,7 +96,7 @@ export class OnlineGame {
   async start(size) {
     if (!this.isLoggedIn()) throw new Error("Login required (nick/password)");
 
-    // ✅ IMPORTANT: se já tinhas um jogo, faz leave ANTES de resetar o gameId
+    // se já estiver num jogo, sai primeiro
     if (this.gameId) {
       try { await this.api.leave(this.nick, this.password, this.gameId); }
       catch { /* ignore */ }
@@ -142,8 +141,7 @@ export class OnlineGame {
     }
   }
 
-  // --------- COMMANDS ---------
-
+  //comandos
   async roll() {
     if (!this.gameId) return;
     if (this.winner !== null) return;
@@ -224,7 +222,7 @@ export class OnlineGame {
     }
   }
 
-  // --------- UPDATE HANDLER ---------
+  //controlo de updates
 
   handleUpdate(data) {
     if (!data || typeof data !== "object") return;
@@ -260,7 +258,7 @@ export class OnlineGame {
       this._extraRollReady = false;
     }
 
-    // dice updates
+    //updates dos daodos
     if ("dice" in data) {
       this.dice = data.dice;
       if (this.dice && typeof this.dice.value === "number") {
@@ -271,7 +269,7 @@ export class OnlineGame {
     }
 
     if ("mustPass" in data) this.mustPass = data.mustPass;
-    // captura detection (antes/depois de aplicar pieces)
+    // deteta capturas (antes/depois de aplicar pieces)
     const prevPieces = Array.isArray(this.pieces) ? this.pieces : null;
 
     if (Array.isArray(data.pieces)) {
@@ -324,7 +322,7 @@ export class OnlineGame {
     }
 
 
-    // ✅ se o jogo acabou, trava tudo e fecha stream
+    //se o jogo acabou, trava tudo e fecha stream
     if ("winner" in data) {
       if (typeof data.winner === "string" || data.winner === null) {
 
@@ -335,7 +333,7 @@ export class OnlineGame {
           this.statusOnce("Game ended.");
         }
 
-        // bloqueia UI/estado para evitar cliques mortos e erros
+        // bloqueia UI
         this.ui.setRollEnabled(false);
         this.ui.setSkipEnabled(false);
         this.step = "from";
@@ -349,13 +347,13 @@ export class OnlineGame {
     }
   }
 
-  // --------- RENDER ---------
+  //render
 
   render() {
     const cols = this.size;
     const matrix = Array.from({ length: this.rows }, () => Array(cols).fill(null));
 
-    // --- build matrix from server pieces ---
+    // controi a matrix de peças
     if (Array.isArray(this.pieces)) {
       for (let i = 0; i < this.pieces.length; i++) {
         const p = this.pieces[i];
@@ -363,17 +361,11 @@ export class OnlineGame {
 
         const { r, c } = this.serverIndexToUI(i);
         const owner = this.isInitialColor(p) ? "B" : "G";
-
         const piece = new Piece(owner);
-
-        // ✅ reachedLastRow do servidor (às vezes falha em casos raros)
         const reachedFromServer = (p.reachedLastRow === true);
-
-        // ✅ fallback robusto: inferir "final" pela posição no array do servidor
-        // rB = linha no referencial do servidor, a partir de baixo: 0..3
         const rB = Math.floor(i / cols);
 
-        // peça pertence ao jogador initial?
+        // peça pertence ao jogador initial
         const belongsToInitial = this.isInitialColor(p);
 
         // se já se moveu e está na "linha do adversário", então é final
@@ -392,11 +384,6 @@ export class OnlineGame {
         else piece.type = "initial";
 
         matrix[r][c] = piece;
-
-        // (opcional) debug do caso raro:
-        // if (inferredReached && !reachedFromServer) {
-        //   console.log("[inferred final]", { i, rB, belongsToInitial, p });
-        // }
       }
     }
 
@@ -404,15 +391,15 @@ export class OnlineGame {
       ? (this.turn === this.initial ? "B" : "G")
       : "G";
 
-    // --- draw board ---
+    // desenhar tabuleiro
     this.ui.clearHighlights(true);
     this.ui.renderBoard(matrix, currentPlayer, (r, c) => this.notifyByCoords(r, c));
 
-    // --- counts ---
+    //contar peças
     const counts = this.countPiecesFromMatrix(matrix);
     this.ui.updateCounts(counts.g, counts.b);
 
-    // --- dice UI ---
+    //dados / animação
     if (this.dice && typeof this.dice.value === "number") {
       const val = this.dice.value;
 
@@ -428,8 +415,7 @@ export class OnlineGame {
       if (key !== this._lastDiceAnimKey) {
         this._lastDiceAnimKey = key;
 
-        // repeat: mantém como false (igual ao teu comportamento anterior)
-        // se quiseres mostrar "(repeat)" quando keepPlaying, troca o 3º arg por: !!this.dice.keepPlaying
+        // repeat: mantém como false 
         this.ui.animateSticks(stickValues, val, false);
       }
     } else {
@@ -438,7 +424,7 @@ export class OnlineGame {
     }
 
 
-    // -------- Buttons logic --------
+    //lógica de botões e status
     const myTurn = (this.turn === this.nick);
     const isChoosingDestination = (this.step === "to" || this.step === "take");
     const mustSkip = (this.mustPass === this.nick || this.mustPass === true);
@@ -475,7 +461,7 @@ export class OnlineGame {
       !isChoosingDestination &&
       (this.dice === null || canRerollNow) &&
       (
-        !mustSkip || canRerollNow   // ✅ se mustSkip mas posso reroll, deixa lançar
+        !mustSkip || canRerollNow
       );
 
     this.ui.setRollEnabled(!!canRoll);
@@ -502,14 +488,13 @@ export class OnlineGame {
       this.ui.markSelected(r, c);
     }
 
-    // Status (as 4 mensagens simples)
+    // Status
     if (!this.gameId) return;
 
     if (!myTurn) {
       this.statusOnce("Wait for opponents play");
       return;
     }
-    // ✅ se podes relançar, a mensagem correta é lançar novamente (não skip)
     if (this.dice === null || canRerollNow) {
       this.statusOnce("Your turn. Throw the sticks");
       return;
@@ -542,7 +527,6 @@ export class OnlineGame {
     return { g, b };
   }
 
-  // --------- COLOR / ROLE MAPPING ---------
 
   isInitialColor(serverPieceObj) {
     if (!this.players || !this.initial) {
@@ -552,7 +536,6 @@ export class OnlineGame {
     return String(serverPieceObj?.color) === String(initialColor);
   }
 
-  // --------- INDEX MAPPING ---------
 
   serverIndexToUI(idx) {
     const size = this.size;

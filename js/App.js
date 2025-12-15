@@ -54,12 +54,11 @@ document.addEventListener("DOMContentLoaded", () => {
       .catch(() => {});
   }
 
-  // ✅ agora é async para conseguires "await leave" antes de um novo jogo online
   ui.onGoToGame = async ({ cols, mode, first, aiLevel }) => {
     ui.resetGameUI();
 
     if (mode === "pvp_online") {
-      // se já estavas online, sai explicitamente do jogo anterior
+      // estando online, sai explicitamente do jogo anterior
       if (activeMode === "online") {
         await onlineGame.leave();
       }
@@ -83,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // se mudaste para local e estavas online, sai do jogo
+    // se mudar para local e estava online, sai do jogo
     if (activeMode === "online") {
       await onlineGame.leave();
     }
@@ -125,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ruleItems.forEach(item => {
     const summary = item.querySelector("summary");
     summary.addEventListener("click", (e) => {
-      e.preventDefault(); // impede abrir o <details>
+      e.preventDefault(); 
       const title = summary.textContent.trim();
       const textContainer = item.querySelector("div, p");
       const text = textContainer ? textContainer.innerHTML : "";
@@ -248,7 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  // -------- Ranking ONLINE (Player vs Player) --------
+  //Ranking ONLINE (Player vs Player)
   const openRankingBtn = document.getElementById("openRankingBtn");
   const rankingOverlay = document.getElementById("rankingOverlay");
   const closeRankingBtn = document.querySelector(".close-ranking");
@@ -291,7 +290,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const size = Number(document.getElementById("boardSize")?.value || 9);
 
-        // ranking não exige login — só group + size
+        // ranking exige group + size
         const res = await onlineGame.api.ranking(onlineGame.group, size);
 
         if (res?.error) rankingTableContainer.innerHTML = `<p>${res.error}</p>`;

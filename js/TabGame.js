@@ -129,11 +129,11 @@ export class TabGame {
     const upCount = sticks.filter(Boolean).length;
     const value = upCount === 0 ? 6 : upCount;
 
-    // animação (canvas) começa já
+    // animação (canvas)
     this.ui.playSound("https://actions.google.com/sounds/v1/objects/wood_hit_mallet.ogg");
     this.ui.animateSticks(sticks, value, false);
 
-    // só depois da animação (~1s) é que aplicamos estado + lógica
+    // só depois da animação é que aplicamos estado + lógica
     setTimeout(() => {
       // regista o lançamento deste turno
       this.turnRolls += 1;
@@ -263,16 +263,14 @@ export class TabGame {
     
     const movingPiece = this.board[fromIdx];
     if (movingPiece) {
-      // ghost move (não bloqueia lógica)
+      // ghost move
       this.ui.animatePieceMove?.(fromIdx, toIdx, { player: movingPiece.player, type: movingPiece.type });
     }
 
     const targetPiece = this.board[toIdx];
-    
 
     // se havia peça no destino, é captura -> flash + shake no destino
     if (targetPiece) {
-      // se estiveres a usar a animação de movimento (~380ms), fica melhor disparar depois
       setTimeout(() => this.ui.fxCapture?.(toIdx), 380);
     }
 
@@ -309,7 +307,7 @@ export class TabGame {
         console.log("[movePiece] → marcou como FINAL");
       }
     } else if (movingPiece.wasOnLastRow && rowTo !== 3) {
-      // Se já esteve na última fila e saiu dela - mantém visual de final
+      // Se já esteve na última fila e saiu dela 
       movingPiece.type = "final";
     }
 

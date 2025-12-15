@@ -1,5 +1,4 @@
 // js/ServerAPI.js
-// Thin wrapper around the TW server API.
 
 export class ServerAPI {
   /**
@@ -21,7 +20,6 @@ export class ServerAPI {
     try {
       data = await res.json();
     } catch {
-      // ignore; handled below
     }
 
     if (!res.ok) {
@@ -31,7 +29,7 @@ export class ServerAPI {
       throw err;
     }
     if (data?.error) {
-      // Server sometimes returns 200 with error payload
+      //  when server returns 200 with error payload
       const err = new Error(data.error);
       err.server = data;
       throw err;
@@ -39,7 +37,7 @@ export class ServerAPI {
     return data ?? {};
   }
 
-  // --- endpoints ---
+  //endpoints
   register(nick, password) {
     return this.post("register", { nick, password });
   }
